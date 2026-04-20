@@ -91,10 +91,20 @@ const PAGE_TITLES: Record<string, string> = {
     "/stats": "Estadísticas",
 };
 
+
+
 export default function MainLayout() {
     const location = useLocation();
 
     const [isDarkMode, setIsDarkMode] = useState(() => document.documentElement.classList.contains('dark'));
+    
+    // Initialize open on desktop, closed on mobile
+    const [isSidebarOpen, setIsSidebarOpen] = useState(() => {
+        if (typeof window !== 'undefined') {
+            return window.innerWidth >= 768; // md breakpoint
+        }
+        return false;
+    });
 
     useEffect(() => {
         if (localStorage.theme === 'dark' || (!('theme' in localStorage) && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
@@ -105,6 +115,13 @@ export default function MainLayout() {
             setIsDarkMode(false);
         }
     }, []);
+
+    // Close sidebar when clicking a link only on mobile
+    useEffect(() => {
+        if (window.innerWidth < 768) {
+            setIsSidebarOpen(false);
+        }
+    }, [location.pathname]);
 
     const toggleTheme = () => {
         setIsDarkMode(prev => {
@@ -126,25 +143,48 @@ export default function MainLayout() {
         to === '/' ? location.pathname === '/' : location.pathname.startsWith(to);
 
     return (
-        <div className="flex h-screen bg-background text-text-primary font-sans">
+        <div className="flex h-screen bg-background text-text-primary font-sans overflow-hidden">
+            {/* Mobile Sidebar Overlay */}
+            {isSidebarOpen && (
+                <div 
+                    className="fixed inset-0 bg-black/50 z-20 md:hidden transition-opacity"
+                    onClick={() => setIsSidebarOpen(false)}
+                />
+            )}
+
             {/* Sidebar */}
-            <aside className="w-64 bg-surface p-6 flex flex-col shadow-sm z-10 overflow-y-auto">
-                {/* Logo */}
-                <div className="flex items-center gap-3 mb-10">
-                    <div className="bg-primary text-white p-2 rounded-lg">
-                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path>
+            <aside 
+                className={`fixed md:static inset-y-0 left-0 bg-surface flex flex-col shadow-sm z-30 overflow-y-auto overflow-x-hidden transform transition-all duration-300 ease-in-out ${
+                    isSidebarOpen ? "translate-x-0 w-64 p-6" : "-translate-x-full md:translate-x-0 md:w-20 md:px-4 md:py-6"
+                }`}
+            >
+                {/* Logo & Toggle */}
+                <div className={`flex items-center mb-10 ${isSidebarOpen ? "gap-3 justify-start" : "justify-center"}`}>
+                    <button 
+                        onClick={() => setIsSidebarOpen(!isSidebarOpen)}
+                        className="bg-primary text-white p-2 rounded-lg hover:bg-primary/90 transition-colors cursor-pointer flex-shrink-0"
+                        title="Alternar Sidebar"
+                    >
+                        <svg className="w-5 h-5 md:hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            {/* Close icon for mobile when open */}
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"></path>
                         </svg>
-                    </div>
-                    <span className="text-xl font-bold text-text-primary">Person OS</span>
+                        <svg className="w-5 h-5 hidden md:block" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            {/* Panel icon to represent controlling sidebar */}
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 6h16M4 12h16M4 18h7"></path>
+                        </svg>
+                    </button>
+                    {isSidebarOpen && (
+                        <span className="text-xl font-bold text-text-primary">Person OS</span>
+                    )}
                 </div>
 
                 {/* Quick Capture */}
-                <button className="flex items-center justify-center gap-2 bg-gray-900 text-white dark:bg-white dark:text-gray-900 hover:opacity-90 p-3 rounded-xl font-bold shadow-md transition-all mb-6 w-full">
-                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <button className={`flex items-center justify-center bg-gray-900 text-white dark:bg-white dark:text-gray-900 hover:opacity-90 p-3 rounded-xl font-bold shadow-md transition-all mb-6 ${isSidebarOpen ? "w-full gap-2" : "w-12 h-12 self-center px-0"}`}>
+                    <svg className="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M12 4v16m8-8H4"></path>
                     </svg>
-                    Captura Rápida
+                    {isSidebarOpen && <span>Captura Rápida</span>}
                 </button>
 
                 {/* Nav */}
@@ -155,7 +195,10 @@ export default function MainLayout() {
                             <Link
                                 key={to}
                                 to={to}
-                                className={`flex items-center gap-3 px-4 py-3 rounded-xl font-medium transition-all group ${active
+                                title={!isSidebarOpen ? label : undefined}
+                                className={`flex items-center rounded-xl font-medium transition-all group ${
+                                    isSidebarOpen ? "gap-3 px-4 py-3" : "justify-center p-3"
+                                } ${active
                                         ? "bg-primary text-white shadow-sm"
                                         : "text-text-secondary hover:bg-gray-50 dark:hover:bg-surface"
                                     }`}
@@ -163,10 +206,12 @@ export default function MainLayout() {
                                 <span className={`flex-shrink-0 ${!active && "group-hover:text-primary transition-colors"}`}>
                                     {icon}
                                 </span>
-                                {label}
+                                {isSidebarOpen && <span>{label}</span>}
                                 {/* Inbox badge placeholder */}
                                 {to === "/inbox" && (
-                                    <span className={`ml-auto text-[11px] font-bold px-2 py-0.5 rounded-full min-w-[20px] text-center ${active ? "bg-white/20 text-white" : "bg-danger/10 text-danger"}`}>
+                                    <span className={`text-[11px] font-bold rounded-full min-w-[20px] text-center ${
+                                        isSidebarOpen ? "ml-auto px-2 py-0.5" : "absolute top-2 right-2 px-1 py-0"
+                                    } ${active ? "bg-white/20 text-white" : "bg-danger/10 text-danger"}`}>
                                         5
                                     </span>
                                 )}
@@ -176,17 +221,23 @@ export default function MainLayout() {
                 </nav>
 
                 {/* Theme Toggle */}
-                <div className="mt-auto pt-6 border-t border-gray-100 dark:border-gray-800">
-                    <button onClick={toggleTheme} className="flex items-center gap-3 px-4 py-3 rounded-xl font-medium transition-all text-text-secondary hover:bg-gray-50 dark:hover:bg-surface w-full">
+                <div className={`mt-auto pt-6 border-t border-gray-100 dark:border-gray-800 ${!isSidebarOpen && "flex justify-center"}`}>
+                    <button 
+                        onClick={toggleTheme} 
+                        title={!isSidebarOpen ? (isDarkMode ? "Light Mode" : "Dark Mode") : undefined}
+                        className={`flex items-center rounded-xl font-medium transition-all text-text-secondary hover:bg-gray-50 dark:hover:bg-surface ${
+                            isSidebarOpen ? "gap-3 px-4 py-3 w-full" : "justify-center p-3"
+                        }`}
+                    >
                         {isDarkMode ? (
                             <>
-                                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"></path></svg>
-                                Light Mode
+                                <svg className="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"></path></svg>
+                                {isSidebarOpen && <span>Light Mode</span>}
                             </>
                         ) : (
                             <>
-                                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"></path></svg>
-                                Dark Mode
+                                <svg className="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"></path></svg>
+                                {isSidebarOpen && <span>Dark Mode</span>}
                             </>
                         )}
                     </button>
@@ -196,22 +247,35 @@ export default function MainLayout() {
             {/* Main Content */}
             <div className="flex-1 flex flex-col overflow-hidden relative">
                 {/* Header */}
-                <header className="h-20 bg-surface flex items-center justify-between px-10 shadow-sm z-0 relative dark:border-b dark:border-gray-800">
-                    <h1 className="text-2xl font-bold text-text-primary">{getPageTitle()}</h1>
+                <header className="h-16 md:h-20 bg-surface flex items-center justify-between px-4 md:px-10 shadow-sm z-10 relative dark:border-b dark:border-gray-800">
+                    <div className="flex items-center gap-3 md:gap-0">
+                        {/* Mobile Toggle Button (only visible when sidebar is closed on mobile) */}
+                        {!isSidebarOpen && (
+                            <button 
+                                className="md:hidden bg-primary text-white p-2 rounded-lg hover:bg-primary/90 transition-colors"
+                                onClick={() => setIsSidebarOpen(true)}
+                            >
+                                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 6h16M4 12h16M4 18h7"></path>
+                                </svg>
+                            </button>
+                        )}
+                        <h1 className="text-xl md:text-2xl font-bold text-text-primary truncate">{getPageTitle()}</h1>
+                    </div>
 
-                    <div className="flex items-center gap-6">
-                        <div className="relative">
+                    <div className="flex items-center gap-4 md:gap-6">
+                        <div className="relative hidden sm:block">
                             <svg className="w-5 h-5 absolute left-3 top-1/2 -translate-y-1/2 text-text-secondary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
                             </svg>
-                            <input type="text" placeholder="Search here..." className="bg-gray-100/80 dark:bg-background text-sm rounded-full pl-10 pr-4 py-2.5 focus:outline-none focus:ring-2 ring-primary/20 w-64 dark:text-text-primary placeholder:text-text-secondary" />
+                            <input type="text" placeholder="Search here..." className="bg-gray-100/80 dark:bg-background text-sm rounded-full pl-10 pr-4 py-2.5 focus:outline-none focus:ring-2 ring-primary/20 w-48 lg:w-64 dark:text-text-primary placeholder:text-text-secondary" />
                         </div>
 
-                        <div className="flex items-center gap-3 border-l pl-6 border-gray-100 dark:border-gray-800">
-                            <div className="w-10 h-10 rounded-full bg-primary/20 overflow-hidden">
+                        <div className="flex items-center gap-3 border-l pl-4 md:pl-6 border-gray-100 dark:border-gray-800">
+                            <div className="w-8 h-8 md:w-10 md:h-10 rounded-full bg-primary/20 overflow-hidden shrink-0">
                                 <img src="https://api.dicebear.com/7.x/avataaars/svg?seed=Felix" alt="Avatar" className="w-full h-full object-cover" />
                             </div>
-                            <div>
+                            <div className="hidden sm:block">
                                 <p className="text-sm font-bold text-text-primary">Camilo</p>
                                 <p className="text-xs text-text-secondary">Admin</p>
                             </div>
@@ -220,7 +284,7 @@ export default function MainLayout() {
                 </header>
 
                 {/* Scrollable Main */}
-                <main className="flex-1 overflow-auto p-10 bg-background">
+                <main className="flex-1 overflow-auto p-4 md:p-10 bg-background">
                     <Outlet />
                 </main>
             </div>
