@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { useAuthStore } from '../../../auth/application/store/authStore';
 import { useContextsStore } from '../../application/store/contextsStore';
-import type { Context, ContextType } from '../../domain/models/types';
+import type { ContextType } from '../../domain/models/types';
 
 export default function ContextsPage() {
     const { userId } = useAuthStore();

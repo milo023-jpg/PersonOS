@@ -18,9 +18,9 @@ export default function TasksPage() {
     const { tasks, fetchTasks } = useTasksStore();
     
     const [activeView, setActiveView] = useState<ViewMode>('today');
-    const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
+    const [, setSelectedTaskId] = useState<string | null>(null);
     const [isGlobalCreatorOpen, setIsGlobalCreatorOpen] = useState(false);
-    const selectedTask = tasks.find(t => t.id === selectedTaskId) || null;
+    // const selectedTask = tasks.find(t => t.id === selectedTaskId) || null;
 
     // Cargar data real de Firebase
     useEffect(() => {

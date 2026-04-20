@@ -9,7 +9,7 @@ interface ContextsState {
     createContext: (userId: string, data: Omit<Context, 'id' | 'userId'>) => Promise<void>;
 }
 
-export const useContextsStore = create<ContextsState>((set, get) => ({
+export const useContextsStore = create<ContextsState>((set) => ({
     contexts: [],
     isLoading: false,
 

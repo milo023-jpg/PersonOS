@@ -21,7 +21,7 @@ export default function RecentActivityWidget() {
                 <div className="absolute left-6 top-2 bottom-2 w-px bg-gray-100"></div>
 
                 <div className="flex flex-col gap-6">
-                    {mockActivity.map((activity, index) => (
+                    {mockActivity.map((activity) => (
                         <div key={activity.id} className="relative flex items-start gap-4">
                             {/* Punto del timeline */}
                             <div className="relative z-10 w-7 h-7 rounded-full bg-white shadow-sm border border-gray-100 flex items-center justify-center text-sm ring-4 ring-white flex-shrink-0">

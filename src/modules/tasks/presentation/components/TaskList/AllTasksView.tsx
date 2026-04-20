@@ -12,7 +12,7 @@ interface Props {
 
 type SortOption = 'created_desc' | 'created_asc' | 'due_asc' | 'due_desc';
 
-export default function AllTasksView({ onSelectTask }: Props) {
+export default function AllTasksView(_props: Props) {
     const { tasks } = useTasksStore();
     const [isCreating, setIsCreating] = useState(false);
     const [editingTaskId, setEditingTaskId] = useState<string | null>(null);

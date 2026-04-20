@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect } from 'react';
 import { useAuthStore } from '../../../auth/application/store/authStore';
 import { useTasksStore } from '../../../tasks/application/store/tasksStore';
 
