@@ -1,0 +1,73 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --primary: #4f46e5;
+    --secondary: #9ca3af;
+    --success: #22c55e;
+    --warning: #f59e0b;
+    --danger: #ef4444;
+    --background: #f8f9fc;
+    --surface: #ffffff;
+    --text-primary: #111827;
+    --text-secondary: #6b7280;
+    
+    --pastel-red: #fee2e2;
+    --pastel-orange: #ffedd5;
+    --pastel-green: #dcfce7;
+    --pastel-purple: #f3e8ff;
+  }
+
+  .dark {
+    --primary: #818cf8;       /* Vibrant violet blue */
+    --secondary: #64748b;     /* Muted gray for inactive icons */
+    --success: #4ade80;       
+    --warning: #fbbf24;       
+    --danger: #f87171;        
+    --background: #0b1120;    /* Dark deep blue from reference */
+    --surface: #1e293b;       /* Lighter tone for cards so they stand out */
+    --text-primary: #f8fafc;
+    --text-secondary: #94a3b8;
+    
+    --pastel-red: #3f1818;
+    --pastel-orange: #3b200e;
+    --pastel-green: #0f2e1b;
+    --pastel-purple: #2b183f;
+  }
+}
+
+/* Aplicar transparencia a los bordes grises de las cards en modo oscuro de forma global para mantener el diseño limpio */
+@layer components {
+  .dark .border-gray-100,
+  .dark .border-gray-200,
+  .dark .border-gray-50,
+  .dark .border-dashed {
+    border-color: transparent !important;
+  }
+}
+
+@layer utilities {
+  .custom-scrollbar::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  .custom-scrollbar::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  .custom-scrollbar::-webkit-scrollbar-thumb {
+    background-color: var(--secondary);
+    border-radius: 10px;
+    opacity: 0.3;
+  }
+  .custom-scrollbar:hover::-webkit-scrollbar-thumb {
+    background-color: var(--primary);
+  }
+  
+  /* Firefox */
+  .custom-scrollbar {
+    scrollbar-width: thin;
+    scrollbar-color: var(--secondary) transparent;
+  }
+}
