@@ -14,7 +14,7 @@ interface Props {
 export default function ListsView({ onSelectTask }: Props) {
     const { userId } = useAuthStore();
     const { tasks } = useTasksStore();
-    const { lists, fetchLists, createList, deleteList, updateList } = useTaskListsStore();
+    const { lists, fetchLists, createList, deleteList, updateList, reorderLists } = useTaskListsStore();
     const { contexts, fetchContexts } = useContextsStore();
     
     const [isCreatingList, setIsCreatingList] = useState(false);
@@ -228,6 +228,22 @@ export default function ListsView({ onSelectTask }: Props) {
                                             <span className="text-sm font-bold text-text-secondary bg-gray-100 dark:bg-white/5 px-2 py-1 rounded-lg">
                                                 {listTasks.length}
                                             </span>
+                                            <button 
+                                                onClick={() => reorderLists(userId!, list.id, 'up')}
+                                                disabled={lists.findIndex(l => l.id === list.id) === 0}
+                                                className="opacity-0 group-hover:opacity-100 text-text-secondary hover:text-primary hover:bg-primary/10 p-1.5 rounded-lg transition-all disabled:opacity-30 disabled:cursor-not-allowed"
+                                                title="Mover arriba"
+                                            >
+                                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 15l7-7 7 7"></path></svg>
+                                            </button>
+                                            <button 
+                                                onClick={() => reorderLists(userId!, list.id, 'down')}
+                                                disabled={lists.findIndex(l => l.id === list.id) === lists.length - 1}
+                                                className="opacity-0 group-hover:opacity-100 text-text-secondary hover:text-primary hover:bg-primary/10 p-1.5 rounded-lg transition-all disabled:opacity-30 disabled:cursor-not-allowed"
+                                                title="Mover abajo"
+                                            >
+                                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path></svg>
+                                            </button>
                                             <button 
                                                 onClick={() => {
                                                     setEditingListId(list.id);

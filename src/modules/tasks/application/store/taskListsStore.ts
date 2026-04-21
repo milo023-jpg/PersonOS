@@ -11,6 +11,7 @@ interface TaskListsState {
     createList: (userId: string, data: Omit<TaskList, 'id' | 'userId' | 'createdAt'>) => Promise<string>;
     updateList: (userId: string, listId: string, partial: Partial<TaskList>) => Promise<void>;
     deleteList: (userId: string, listId: string) => Promise<void>;
+    reorderLists: (userId: string, listId: string, direction: 'up' | 'down') => Promise<void>;
 }
 
 export const useTaskListsStore = create<TaskListsState>((set, get) => ({
@@ -67,6 +68,33 @@ export const useTaskListsStore = create<TaskListsState>((set, get) => ({
             await taskListsRepository.deleteList(userId, listId);
         } catch (error: any) {
             set({ lists: previous, error: error.message });
+        }
+    },
+
+    reorderLists: async (userId, listId, direction) => {
+        const lists = get().lists;
+        const currentIndex = lists.findIndex(l => l.id === listId);
+        if (currentIndex === -1) return;
+
+        const newIndex = direction === 'up' ? currentIndex - 1 : currentIndex + 1;
+        if (newIndex < 0 || newIndex >= lists.length) return;
+
+        const newLists = [...lists];
+        [newLists[currentIndex], newLists[newIndex]] = [newLists[newIndex], newLists[currentIndex]];
+
+        // Update orders
+        newLists.forEach((list, index) => {
+            list.order = index;
+        });
+
+        set({ lists: newLists });
+
+        // Persist the changes
+        try {
+            await Promise.all(newLists.map(list => taskListsRepository.updateList(userId, list.id, { order: list.order })));
+        } catch (error: any) {
+            // Revert on error
+            set({ lists: lists, error: error.message });
         }
     }
 }));
