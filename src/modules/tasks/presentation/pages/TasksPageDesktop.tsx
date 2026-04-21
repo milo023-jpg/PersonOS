@@ -1,21 +1,23 @@
 import { useEffect, useState } from 'react';
 import { useAuthStore } from '../../../auth/application/store/authStore';
 import { useTasksStore } from '../../application/store/tasksStore';
-import InboxView from '../components/TaskList/InboxView';
+import { useTaskListsStore } from '../../application/store/taskListsStore';
 import TodayView from '../components/TaskList/TodayView';
 import AllTasksView from '../components/TaskList/AllTasksView';
 import ListsView from '../components/TaskList/ListsView';
 import KanbanBoard from '../components/TaskBoard/KanbanBoard';
 
 import InlineTaskCreator from '../components/TaskList/InlineTaskCreator';
+import { GENERAL_LIST_ID } from '../../domain/constants/defaults';
 import { isDueBeforeOrToday, toTaskDateTimestamp } from '../../domain/utils/taskDate';
 import { seedDBWithLists } from '../../../../scripts/seedTasks';
 
-type ViewMode = 'inbox' | 'today' | 'all' | 'lists' | 'board';
+type ViewMode = 'today' | 'all' | 'lists' | 'board';
 
 export default function TasksPageDesktop() {
     const { userId } = useAuthStore();
     const { tasks, fetchTasks } = useTasksStore();
+    const { fetchLists } = useTaskListsStore();
 
     const [activeView, setActiveView] = useState<ViewMode>('today');
     const [, setSelectedTaskId] = useState<string | null>(null);
@@ -26,22 +28,22 @@ export default function TasksPageDesktop() {
     useEffect(() => {
         if (userId) {
             fetchTasks(userId);
+            fetchLists(userId);
         }
-    }, [userId, fetchTasks]);
+    }, [userId, fetchTasks, fetchLists]);
 
     const tabs = [
-        { id: 'inbox', label: '📥 Inbox', count: tasks.filter(t => t.isInbox && t.status !== 'completed').length },
         {
             id: 'today',
             label: '⭐ Hoy',
             count: tasks.filter(t => {
-                if (t.status === 'completed' || t.isInbox) return false;
+                if (t.status === 'completed') return false;
                 const isUnscheduledHighPriority = toTaskDateTimestamp(t.dueDate) === undefined && (t.priority === 'high' || t.priority === 'urgent');
                 return isDueBeforeOrToday(t.dueDate) || isUnscheduledHighPriority;
             }).length
         },
         { id: 'all', label: '📋 Todas', count: tasks.filter(t => t.status !== 'completed').length },
-        { id: 'lists', label: '🗂️ Listas', count: null },
+        { id: 'lists', label: '🗂️ Listas', count: tasks.filter(t => t.listId === GENERAL_LIST_ID && t.status !== 'completed').length },
         { id: 'board', label: '🛹 Tablero', count: null },
     ] as const;
 
@@ -102,7 +104,6 @@ export default function TasksPageDesktop() {
             {/* Contenedor de la Vista Activa */}
 
             <div className="flex-1 min-h-0 w-full relative">
-                {activeView === 'inbox' && <InboxView onSelectTask={(t) => setSelectedTaskId(t.id)} />}
                 {activeView === 'today' && <TodayView onSelectTask={(t) => setSelectedTaskId(t.id)} />}
                 {activeView === 'all' && <AllTasksView onSelectTask={(t) => setSelectedTaskId(t.id)} />}
                 {activeView === 'lists' && <ListsView onSelectTask={(t) => setSelectedTaskId(t.id)} />}

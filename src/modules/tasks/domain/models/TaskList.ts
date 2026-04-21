@@ -5,5 +5,6 @@ export interface TaskList {
     color: string;
     order: number;
     createdAt: number;
+    isDefault?: boolean;
     defaultContextId?: string;
 }

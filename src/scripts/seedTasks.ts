@@ -1,5 +1,6 @@
 import { db } from '../services/firebase';
 import { collection, getDocs, writeBatch, doc } from 'firebase/firestore';
+import { GENERAL_LIST_ID } from '../modules/tasks/domain/constants/defaults';
 
 export async function seedDBWithLists(userId: string) {
     if (!userId) return;
@@ -20,6 +21,7 @@ export async function seedDBWithLists(userId: string) {
 
     // 3. Crear nuevas listas semillas
     const predefinedLists = [
+        { id: GENERAL_LIST_ID, name: 'General', color: 'bg-emerald-500', isDefault: true },
         { name: '🛠️ Proyecto Personal OS', color: 'bg-primary' },
         { name: '🛒 Compras de la casa', color: 'bg-emerald-500' },
         { name: '📚 Universidad / Cursos', color: 'bg-blue-500' },
@@ -29,7 +31,7 @@ export async function seedDBWithLists(userId: string) {
     const listIds: string[] = [];
 
     predefinedLists.forEach((list, index) => {
-        const lRef = doc(listsRef);
+        const lRef = 'id' in list ? doc(listsRef, list.id) : doc(listsRef);
         listIds.push(lRef.id);
         listsBatch.set(lRef, {
             ...list,
@@ -62,11 +64,11 @@ export async function seedDBWithLists(userId: string) {
             dueDate,
             createdAt: baseDate - (10 * dayMillis),
             updatedAt: baseDate,
-            listId: randomListId, // Asignada a una lista!!
+            listId: randomListId,
             isRecurring: false,
             order: i,
             isImportant: i % 3 === 0,
-            isInbox: false
+            source: 'manual'
         } as any;
 
         if (isCompleted) t.completedAt = baseDate - dayMillis;
@@ -75,19 +77,20 @@ export async function seedDBWithLists(userId: string) {
         taskBatch.set(tRef, { ...t, id: tRef.id });
     }
     
-    // Tareas adicionales sin lista (para el Inbox)
+    // Tareas adicionales en General para validar fallback por defecto
     for (let i = 16; i <= 18; i++) {
         const t = {
             userId,
-            title: `[Seed] Idea rápida ${i} en Inbox`,
+            title: `[Seed] Idea rápida ${i} en General`,
             status: "todo",
             priority: "low",
             createdAt: baseDate,
             updatedAt: baseDate,
+            listId: GENERAL_LIST_ID,
             isRecurring: false,
             order: i,
             isImportant: false,
-            isInbox: true
+            source: 'manual'
         } as any;
         const tRef = doc(tasksRef);
         taskBatch.set(tRef, { ...t, id: tRef.id });

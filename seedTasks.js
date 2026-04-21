@@ -13,71 +13,114 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 const userId = "dev-user-001";
+
 const tasksRef = collection(db, `users/${userId}/tasks`);
+const listsRef = collection(db, `users/${userId}/taskLists`);
+
+const taskTitles = [
+    "Definir arquitectura base del proyecto",
+    "Revisar widgets del dashboard",
+    "Preparar backlog de mejoras UX",
+    "Limpiar componentes legacy",
+    "Optimizar carga inicial",
+    "Actualizar documentación técnica",
+    "Diseñar flujo de captura rápida",
+    "Corregir estados vacíos en tareas",
+    "Agregar feedback visual en formularios",
+    "Revisar performance del tablero",
+    "Separar lógica de listas por store",
+    "Validar persistencia en Firebase",
+    "Refinar navegación móvil",
+    "Crear checklist de despliegue",
+    "Probar edición de tareas complejas",
+    "Ajustar estilos de lista General",
+    "Depurar filtros de Today",
+    "Normalizar datos existentes",
+    "Revisar seeds de desarrollo",
+    "Preparar demo para pruebas internas",
+    "Documentar decisiones de producto",
+    "Ordenar prioridades semanales",
+    "Corregir scroll en vistas largas",
+    "Afinar copy del módulo Inbox"
+];
 
 async function seed() {
-    console.log("Fetching existing tasks...");
-    const snapshot = await getDocs(tasksRef);
-    const batchDelete = writeBatch(db);
-    let count = 0;
-    snapshot.forEach(d => {
-        batchDelete.delete(d.ref);
-        count++;
-    });
-    if(count > 0) {
-        await batchDelete.commit();
-        console.log(`Deleted ${count} old tasks.`);
+    console.log("Fetching existing lists...");
+    const listsSnapshot = await getDocs(listsRef);
+    const lists = listsSnapshot.docs.map((listDoc) => ({
+        id: listDoc.id,
+        ...listDoc.data()
+    }));
+
+    if (lists.length === 0) {
+        throw new Error("No existen listas para asignar tareas. Crea al menos una lista antes de correr el seed.");
     }
 
-    // Now insert 20 new tasks
-    // Base reference date: "2026-04-12T12:00:00.000Z"
-    const todayMillis = new Date("2026-04-12T12:00:00.000Z").getTime();
+    console.log(`Found ${lists.length} lists. Cleaning existing tasks...`);
+    const existingTasks = await getDocs(tasksRef);
+    const deleteBatch = writeBatch(db);
+    let deletedCount = 0;
+
+    existingTasks.forEach((taskDoc) => {
+        deleteBatch.delete(taskDoc.ref);
+        deletedCount++;
+    });
+
+    if (deletedCount > 0) {
+        await deleteBatch.commit();
+        console.log(`Deleted ${deletedCount} old tasks.`);
+    }
+
+    const baseDate = new Date("2026-04-21T12:00:00.000Z").getTime();
     const dayMillis = 24 * 60 * 60 * 1000;
-    
-    const tasks = [];
-    
-    for (let i = 1; i <= 20; i++) {
-        let offsetDays = 0;
-        if (i <= 6) offsetDays = -Math.floor(Math.random() * 5 + 1); // Past: -1 to -5 days
-        else if (i <= 14) offsetDays = 0; // Today
-        else offsetDays = Math.floor(Math.random() * 5 + 1); // Future: 1 to 5 days
-        
-        const isCompleted = i <= 2; // First 2 past tasks are completed
-        const dueDate = todayMillis + (offsetDays * dayMillis);
-        
-        tasks.push({
+    const priorities = ["low", "medium", "high", "urgent"];
+    const statuses = ["todo", "todo", "todo", "in_progress", "completed"];
+    const tasksToCreate = 24;
+
+    const insertBatch = writeBatch(db);
+
+    for (let i = 0; i < tasksToCreate; i++) {
+        const list = lists[i % lists.length];
+        const status = statuses[i % statuses.length];
+        const priority = priorities[i % priorities.length];
+        const offsetDays = (i % 9) - 3;
+        const createdAt = baseDate - ((10 - (i % 6)) * dayMillis);
+        const dueDate = baseDate + (offsetDays * dayMillis);
+        const completedAt = status === "completed" ? dueDate + 2 * 60 * 60 * 1000 : undefined;
+
+        const task = {
             userId,
-            title: `Generada Automáticamente ${i} (${offsetDays < 0 ? 'Atrasada' : offsetDays === 0 ? 'Para Hoy' : 'Futura'})`,
-            description: "Mock description para validar filtrados",
-            status: isCompleted ? "completed" : "todo",
-            priority: ["low", "medium", "high", "urgent"][Math.floor(Math.random() * 4)],
+            title: `[Seed] ${taskTitles[i % taskTitles.length]}`,
+            description: `Tarea semilla ${i + 1} asignada a ${list.name}.`,
+            status,
+            priority,
             dueDate,
-            createdAt: todayMillis - (10 * dayMillis),
-            updatedAt: todayMillis,
-            completedAt: isCompleted ? todayMillis - dayMillis : undefined,
-            tags: ["test"],
+            createdAt,
+            updatedAt: baseDate,
+            listId: list.id,
+            source: "manual",
             isRecurring: false,
             order: i,
-            isImportant: i % 4 === 0,
-            isInbox: false
+            isImportant: priority === "high" || priority === "urgent",
+        };
+
+        if (completedAt !== undefined) {
+            task.completedAt = completedAt;
+        }
+
+        const taskRef = doc(tasksRef);
+        insertBatch.set(taskRef, {
+            ...task,
+            id: taskRef.id
         });
     }
 
-    const batchInsert = writeBatch(db);
-    for (const t of tasks) {
-        const dRef = doc(tasksRef);
-        // Clean undefined manually for Firebase just in case
-        const data = { ...t, id: dRef.id };
-        if (data.completedAt === undefined) delete data.completedAt;
-        batchInsert.set(dRef, data);
-    }
-    
-    await batchInsert.commit();
-    console.log("Inserted 20 mock tasks successfully.");
+    await insertBatch.commit();
+    console.log(`Inserted ${tasksToCreate} tasks distributed across ${lists.length} existing lists.`);
     process.exit(0);
 }
 
-seed().catch(err => {
-    console.error(err);
+seed().catch((error) => {
+    console.error(error);
     process.exit(1);
 });

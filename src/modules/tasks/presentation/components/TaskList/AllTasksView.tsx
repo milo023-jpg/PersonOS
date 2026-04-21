@@ -5,6 +5,7 @@ import InlineTaskCreator from './InlineTaskCreator';
 import { AnimatePresence } from 'framer-motion';
 import type { Task, TaskStatus, TaskPriority } from '../../../domain/models/Task';
 import { toTaskDateTimestamp } from '../../../domain/utils/taskDate';
+import { SystemScrollArea } from '../../../../../shared/ui/SystemScrollArea';
 
 interface Props {
   onSelectTask: (task: Task) => void;
@@ -85,7 +86,7 @@ export default function AllTasksView(_props: Props) {
     };
 
     return (
-        <div className="absolute inset-0 flex flex-col p-6 max-w-5xl mx-auto w-full gap-6 h-full overflow-hidden">
+        <SystemScrollArea className="w-full h-full flex flex-col p-6 max-w-5xl mx-auto gap-6">
             
             {/* Toolbar Filters */}
             <div className="flex flex-wrap gap-3 p-4 bg-surface rounded-2xl border border-gray-100 dark:border-white/5 shadow-sm shrink-0 items-center">
@@ -159,7 +160,7 @@ export default function AllTasksView(_props: Props) {
             </div>
 
             {/* List */}
-            <div className="flex-1 overflow-y-auto pb-24 flex flex-col gap-3 custom-scrollbar pr-2 min-h-0">
+            <div className="flex flex-col gap-3 pb-24">
                 <AnimatePresence>
                     {pendingTasks.map(t => (
                         t.id === editingTaskId ? (
@@ -195,7 +196,7 @@ export default function AllTasksView(_props: Props) {
                         No hay tareas que coincidan con estos filtros.
                     </div>
                 )}
-                <div className="mt-2 shrink-0">
+                <div className="mt-2">
                     {isCreating ? (
                         <InlineTaskCreator 
                             onCancel={() => setIsCreating(false)} 
@@ -212,6 +213,6 @@ export default function AllTasksView(_props: Props) {
                     )}
                 </div>
             </div>
-        </div>
+        </SystemScrollArea>
     );
 }

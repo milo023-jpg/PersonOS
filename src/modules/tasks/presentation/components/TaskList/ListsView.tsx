@@ -3,9 +3,12 @@ import { useAuthStore } from '../../../../auth/application/store/authStore';
 import { useTasksStore } from '../../../application/store/tasksStore';
 import { useTaskListsStore } from '../../../application/store/taskListsStore';
 import { useContextsStore } from '../../../../contexts/application/store/contextsStore';
+import { GENERAL_LIST_ID } from '../../../domain/constants/defaults';
 import TaskItem from './TaskItem';
+import InlineTaskCreator from './InlineTaskCreator';
 import type { Task } from '../../../domain/models/Task';
 import { AnimatePresence } from 'framer-motion';
+import { SystemScrollArea } from '../../../../../shared/ui/SystemScrollArea';
 
 interface Props {
   onSelectTask: (task: Task) => void;
@@ -30,6 +33,7 @@ export default function ListsView({ onSelectTask }: Props) {
 
     // Estado para trackear qué listas están desplegadas mostrando todas sus tareas
     const [expandedLists, setExpandedLists] = useState<Record<string, boolean>>({});
+    const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
 
     const toggleExpansion = (listId: string) => {
         setExpandedLists(prev => ({
@@ -83,7 +87,7 @@ export default function ListsView({ onSelectTask }: Props) {
     ];
 
     return (
-        <div className="absolute inset-0 overflow-y-auto custom-scrollbar w-full">
+        <SystemScrollArea className="w-full h-full flex flex-col">
             <div className="mx-auto w-full max-w-7xl flex flex-col p-6 lg:px-8 gap-8 pb-24">
             
             <div className="flex items-center justify-between">
@@ -174,6 +178,7 @@ export default function ListsView({ onSelectTask }: Props) {
                     const listTasks = tasks.filter(t => t.listId === list.id && t.status !== 'completed');
                     const isExpanded = !!expandedLists[list.id];
                     const displayedTasks = isExpanded ? listTasks : listTasks.slice(0, 4);
+                    const isGeneralList = list.id === GENERAL_LIST_ID;
                     
                     return (
                         <div key={list.id} className="bg-surface border border-gray-100 dark:border-white/5 rounded-3xl p-6 flex flex-col gap-5 shadow-[0_8px_30px_rgb(0,0,0,0.04)] dark:shadow-none transition-all">
@@ -222,7 +227,14 @@ export default function ListsView({ onSelectTask }: Props) {
                                             <div className="w-8 h-8 rounded-xl flex items-center justify-center bg-gray-50 dark:bg-white/5">
                                                 <div className={`w-3.5 h-3.5 rounded-full ${list.color}`}></div>
                                             </div>
-                                            <h3 className="text-lg font-black text-text-primary tracking-tight">{list.name}</h3>
+                                            <div className="flex items-center gap-2">
+                                                <h3 className="text-lg font-black text-text-primary tracking-tight">{list.name}</h3>
+                                                {isGeneralList && (
+                                                    <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">
+                                                        Default
+                                                    </span>
+                                                )}
+                                            </div>
                                         </div>
                                         <div className="flex items-center gap-2">
                                             <span className="text-sm font-bold text-text-secondary bg-gray-100 dark:bg-white/5 px-2 py-1 rounded-lg">
@@ -244,25 +256,29 @@ export default function ListsView({ onSelectTask }: Props) {
                                             >
                                                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path></svg>
                                             </button>
-                                            <button 
-                                                onClick={() => {
-                                                    setEditingListId(list.id);
-                                                    setEditListName(list.name);
-                                                    setEditListColor(list.color);
-                                                    setEditListContext(list.defaultContextId || '');
-                                                }}
-                                                className="opacity-0 group-hover:opacity-100 text-text-secondary hover:text-primary hover:bg-primary/10 p-1.5 rounded-lg transition-all"
-                                                title="Editar lista"
-                                            >
-                                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"></path></svg>
-                                            </button>
-                                            <button 
-                                                onClick={() => handleDeleteList(list.id)}
-                                                className="opacity-0 group-hover:opacity-100 text-red-500 hover:bg-red-500/10 p-1.5 rounded-lg transition-all"
-                                                title="Eliminar lista"
-                                            >
-                                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
-                                            </button>
+                                            {!isGeneralList && (
+                                                <>
+                                                    <button 
+                                                        onClick={() => {
+                                                            setEditingListId(list.id);
+                                                            setEditListName(list.name);
+                                                            setEditListColor(list.color);
+                                                            setEditListContext(list.defaultContextId || '');
+                                                        }}
+                                                        className="opacity-0 group-hover:opacity-100 text-text-secondary hover:text-primary hover:bg-primary/10 p-1.5 rounded-lg transition-all"
+                                                        title="Editar lista"
+                                                    >
+                                                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"></path></svg>
+                                                    </button>
+                                                    <button 
+                                                        onClick={() => handleDeleteList(list.id)}
+                                                        className="opacity-0 group-hover:opacity-100 text-red-500 hover:bg-red-500/10 p-1.5 rounded-lg transition-all"
+                                                        title="Eliminar lista"
+                                                    >
+                                                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+                                                    </button>
+                                                </>
+                                            )}
                                         </div>
                                     </>
                                 )}
@@ -276,7 +292,21 @@ export default function ListsView({ onSelectTask }: Props) {
                                 ) : (
                                     <AnimatePresence>
                                         {displayedTasks.map(task => (
-                                            <TaskItem key={task.id} task={task} onSelect={onSelectTask} bgClass="bg-gray-50 dark:bg-background" />
+                                            task.id === editingTaskId ? (
+                                                <div key={task.id} className="w-full">
+                                                    <InlineTaskCreator editTask={task} onCancel={() => setEditingTaskId(null)} />
+                                                </div>
+                                            ) : (
+                                                <TaskItem
+                                                    key={task.id}
+                                                    task={task}
+                                                    onSelect={(selectedTask) => {
+                                                        setEditingTaskId(selectedTask.id);
+                                                        onSelectTask(selectedTask);
+                                                    }}
+                                                    bgClass="bg-gray-50 dark:bg-background"
+                                                />
+                                            )
                                         ))}
                                         
                                         {!isExpanded && listTasks.length > 4 && (
@@ -308,6 +338,6 @@ export default function ListsView({ onSelectTask }: Props) {
                 })}
             </div>
             </div>
-        </div>
+        </SystemScrollArea>
     );
 }

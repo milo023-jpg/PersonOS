@@ -1,7 +1,7 @@
 import { createContext, useContext, useState, type ReactNode } from 'react';
 
 type ViewType = 'home' | 'list';
-type FilterType = 'inbox' | 'today' | 'all' | 'list';
+type FilterType = 'today' | 'all' | 'list';
 
 interface MobileNavigationState {
     view: ViewType;
@@ -20,11 +20,11 @@ const MobileNavigationContext = createContext<MobileNavigationContextType | null
 export function MobileNavigationProvider({ children }: { children: ReactNode }) {
     const [state, setState] = useState<MobileNavigationState>({
         view: 'home',
-        filter: 'inbox'
+        filter: 'today'
     });
 
     const goToHome = () => {
-        setState({ view: 'home', filter: 'inbox' });
+        setState({ view: 'home', filter: 'today' });
     };
 
     const goToList = (filter: FilterType, listId?: string) => {
@@ -32,7 +32,7 @@ export function MobileNavigationProvider({ children }: { children: ReactNode }) 
     };
 
     const goBack = () => {
-        setState({ view: 'home', filter: 'inbox' });
+        setState({ view: 'home', filter: 'today' });
     };
 
     return (

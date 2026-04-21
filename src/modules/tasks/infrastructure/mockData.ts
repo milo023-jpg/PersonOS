@@ -1,5 +1,6 @@
 import type { Task } from '../domain/models/Task';
 import type { TaskStats } from '../domain/models/TaskStats';
+import { GENERAL_LIST_ID } from '../domain/constants/defaults';
 
 const now = Date.now();
 const day = 24 * 60 * 60 * 1000;
@@ -16,10 +17,10 @@ export const generateMockTasks = (userId: string): Task[] => [
     createdAt: now - 3 * day,
     updatedAt: now - 1 * day,
     completedAt: now - 1 * day,
+    listId: GENERAL_LIST_ID,
     isRecurring: false,
     order: 0,
     isImportant: true,
-    isInbox: false,
     estimatedTime: 120,
     actualTime: 140
   },
@@ -33,10 +34,10 @@ export const generateMockTasks = (userId: string): Task[] => [
     dueDate: now + 1 * day,
     createdAt: now - 1 * day,
     updatedAt: now,
+    listId: GENERAL_LIST_ID,
     isRecurring: false,
     order: 0,
     isImportant: true,
-    isInbox: false,
     estimatedTime: 45
   },
   {
@@ -48,10 +49,10 @@ export const generateMockTasks = (userId: string): Task[] => [
     priority: 'medium',
     createdAt: now,
     updatedAt: now,
+    listId: GENERAL_LIST_ID,
     isRecurring: false,
     order: 0,
     isImportant: false,
-    isInbox: true,
   },
   {
     id: 't-4',
@@ -62,11 +63,11 @@ export const generateMockTasks = (userId: string): Task[] => [
     dueDate: now - 2 * day, // Vencida
     createdAt: now - 10 * day,
     updatedAt: now - 10 * day,
+    listId: GENERAL_LIST_ID,
     isRecurring: true,
     recurrenceRule: { type: 'monthly', interval: 1 },
     order: 1,
     isImportant: false,
-    isInbox: false,
   },
   {
     id: 't-5',
@@ -77,11 +78,11 @@ export const generateMockTasks = (userId: string): Task[] => [
     dueDate: now, // Hoy
     createdAt: now,
     updatedAt: now,
+    listId: GENERAL_LIST_ID,
     isRecurring: true,
     recurrenceRule: { type: 'daily', interval: 1 },
     order: 2,
     isImportant: false,
-    isInbox: false,
   }
 ];
 

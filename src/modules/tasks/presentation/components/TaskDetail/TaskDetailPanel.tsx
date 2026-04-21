@@ -123,7 +123,7 @@ export default function TaskDetailPanel({ task, onClose }: Props) {
                     </div>
 
                     {/* Body */}
-                    <div className="flex-1 overflow-y-auto p-6 flex flex-col gap-8 custom-scrollbar">
+                    <div className="flex-1 overflow-y-auto p-6 flex flex-col gap-8 system-scroll">
                         {/* Title input */}
                         <textarea 
                             value={task.title}

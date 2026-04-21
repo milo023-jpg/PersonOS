@@ -5,6 +5,7 @@ import { normalizeTaskDateTimestamp } from '../../../domain/utils/taskDate';
 import { useAuthStore } from '../../../../auth/application/store/authStore';
 import { useTaskListsStore } from '../../../application/store/taskListsStore';
 import { useContextsStore } from '../../../../contexts/application/store/contextsStore';
+import { GENERAL_LIST_ID } from '../../../domain/constants/defaults';
 
 interface Props {
   task: Task;
@@ -90,9 +91,9 @@ export default function TaskItem({ task, onSelect, bgClass }: Props) {
                     <h3 className={`text-[15px] font-bold truncate transition-colors ${isCompleted ? 'line-through text-text-secondary' : 'text-text-primary'}`}>
                         {task.title}
                     </h3>
-                    {task.isInbox && !isCompleted && (
+                    {task.listId === GENERAL_LIST_ID && !isCompleted && (
                         <span className="shrink-0 bg-blue-100 text-blue-600 dark:bg-blue-500/10 dark:text-blue-400 text-[9px] uppercase font-black px-1.5 py-0.5 rounded">
-                            NUEVA
+                            GENERAL
                         </span>
                     )}
                 </div>

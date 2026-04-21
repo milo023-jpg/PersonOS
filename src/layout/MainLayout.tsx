@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { Outlet, Link, useLocation } from "react-router-dom";
+import { SystemScrollArea } from "../shared/ui/SystemScrollArea";
 
 interface NavItem {
     to: string;
@@ -153,7 +154,7 @@ export default function MainLayout() {
             )}
 
             {/* Sidebar */}
-            <aside 
+            <SystemScrollArea
                 className={`fixed md:static inset-y-0 left-0 bg-surface flex flex-col shadow-sm z-30 overflow-y-auto overflow-x-hidden transform transition-all duration-300 ease-in-out ${
                     isSidebarOpen ? "translate-x-0 w-64 p-6" : "-translate-x-full md:translate-x-0 md:w-20 md:px-4 md:py-6"
                 }`}
@@ -242,7 +243,7 @@ export default function MainLayout() {
                         )}
                     </button>
                 </div>
-            </aside>
+            </SystemScrollArea>
 
             {/* Main Content */}
             <div className="flex-1 flex flex-col overflow-hidden relative">
@@ -284,9 +285,9 @@ export default function MainLayout() {
                 </header>
 
                 {/* Scrollable Main */}
-                <main className="flex-1 overflow-auto p-4 md:p-10 bg-background">
+                <SystemScrollArea direction="both" className="flex-1 p-4 md:p-10 bg-background">
                     <Outlet />
-                </main>
+                </SystemScrollArea>
             </div>
         </div>
     );

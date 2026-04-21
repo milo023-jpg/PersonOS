@@ -1,9 +1,9 @@
 import { useState } from 'react';
 import { motion } from 'framer-motion';
-import InboxView from '../components/TaskList/InboxView';
 import TodayView from '../components/TaskList/TodayView';
 import AllTasksView from '../components/TaskList/AllTasksView';
 import ListsView from '../components/TaskList/ListsView';
+import SingleListView from '../components/TaskList/SingleListView';
 import { useTasksMobileNavigation } from './MobileNavigationContext';
 import { useTaskListsStore } from '../../application/store/taskListsStore';
 import type { Task } from '../../domain/models/Task';
@@ -15,7 +15,6 @@ export default function TaskListViewMobile() {
 
     const getTitle = () => {
         switch (filter) {
-            case 'inbox': return 'Inbox';
             case 'today': return 'Hoy';
             case 'all': return 'Todas';
             case 'list': {
@@ -30,16 +29,14 @@ export default function TaskListViewMobile() {
         const onSelectTask = (task: Task) => setSelectedTaskId(task.id);
 
         switch (filter) {
-            case 'inbox':
-                return <InboxView onSelectTask={onSelectTask} />;
             case 'today':
                 return <TodayView onSelectTask={onSelectTask} />;
             case 'all':
                 return <AllTasksView onSelectTask={onSelectTask} />;
             case 'list':
-                return <ListsView onSelectTask={onSelectTask} />;
+                return listId ? <SingleListView onSelectTask={onSelectTask} listId={listId} /> : <ListsView onSelectTask={onSelectTask} />;
             default:
-                return <InboxView onSelectTask={onSelectTask} />;
+                return <TodayView onSelectTask={onSelectTask} />;
         }
     };
 

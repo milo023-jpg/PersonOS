@@ -1,6 +1,15 @@
 import { create } from 'zustand';
 import type { Task, TaskStatus } from '../../domain/models/Task';
+import { GENERAL_LIST_ID } from '../../domain/constants/defaults';
 import { taskRepository } from '../../infrastructure/repositories/taskRepository';
+
+function normalizeTask(task: Task): Task {
+    return {
+        ...task,
+        listId: task.listId || GENERAL_LIST_ID,
+        source: task.source || 'manual'
+    };
+}
 
 interface TasksState {
     tasks: Task[];
@@ -28,7 +37,18 @@ export const useTasksStore = create<TasksState>((set, get) => ({
         set({ isLoading: true, error: null });
         try {
             const tasks = await taskRepository.getTasks(userId);
-            set({ tasks });
+            const migratedTasks = tasks.map((task) => normalizeTask(task));
+
+            const missingListTasks = tasks.filter((task) => !task.listId);
+            if (missingListTasks.length > 0) {
+                await Promise.all(
+                    missingListTasks.map((task) =>
+                        taskRepository.updateTask(userId, task.id, { listId: GENERAL_LIST_ID })
+                    )
+                );
+            }
+
+            set({ tasks: migratedTasks });
         } catch (error: any) {
             set({ error: error.message });
         } finally {
@@ -39,8 +59,9 @@ export const useTasksStore = create<TasksState>((set, get) => ({
     addTask: async (taskData) => {
         set({ isLoading: true, error: null });
         try {
-            const id = await taskRepository.createTask(taskData);
-            set((state) => ({ tasks: [{ ...taskData, id }, ...state.tasks] }));
+            const normalizedTask = normalizeTask(taskData as Task);
+            const id = await taskRepository.createTask(normalizedTask);
+            set((state) => ({ tasks: [{ ...normalizedTask, id }, ...state.tasks] }));
             return id;
         } catch (error: any) {
             set({ error: error.message });
@@ -54,7 +75,7 @@ export const useTasksStore = create<TasksState>((set, get) => ({
         // Optimistic update
         const previousTasks = get().tasks;
         set((state) => ({
-            tasks: state.tasks.map(t => t.id === taskId ? { ...t, ...partial, updatedAt: Date.now() } : t)
+            tasks: state.tasks.map(t => t.id === taskId ? normalizeTask({ ...t, ...partial, updatedAt: Date.now() } as Task) : t)
         }));
         
         try {
@@ -86,7 +107,7 @@ export const useTasksStore = create<TasksState>((set, get) => ({
         set((state) => ({
             tasks: state.tasks.map((task) => {
                 const match = updates.find((update) => update.taskId === task.id);
-                return match ? { ...task, ...match.partial, updatedAt: timestamp } : task;
+                return match ? normalizeTask({ ...task, ...match.partial, updatedAt: timestamp } as Task) : task;
             })
         }));
 

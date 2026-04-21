@@ -23,9 +23,9 @@ export interface Task {
   updatedAt: number;
   completedAt?: number;
 
-
+  source?: 'inbox' | 'manual';
   contextId?: string;
-  listId?: string; // Para agrupamiento en listas personalizadas
+  listId: string; // Toda tarea debe pertenecer a una lista
 
   isRecurring: boolean;
   recurrenceRule?: RecurrenceRule;
@@ -36,7 +36,6 @@ export interface Task {
   order: number; // para drag & drop
   
   isImportant: boolean;
-  isInbox: boolean;
 
   parentTaskId?: string; // para subtareas
 }

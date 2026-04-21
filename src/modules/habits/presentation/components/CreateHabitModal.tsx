@@ -88,7 +88,7 @@ export default function CreateHabitModal({ isOpen, onClose, userId, habitToEdit 
                     </button>
                 </div>
 
-                <div className="p-6 flex flex-col gap-6 overflow-y-auto">
+                <div className="p-6 flex flex-col gap-6 overflow-y-auto system-scroll">
 
                     {/* Input: Nombre del Hábito */}
                     <div>

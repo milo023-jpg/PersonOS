@@ -10,6 +10,14 @@ export const taskListsRepository = {
         return await dbService.addDocument(`users/${list.userId}/taskLists`, list);
     },
 
+    async upsertList(userId: string, listId: string, data: Omit<TaskList, 'id' | 'userId' | 'createdAt'>): Promise<void> {
+        await dbService.upsertDocument(`users/${userId}/taskLists`, listId, {
+            ...data,
+            userId,
+            createdAt: Date.now()
+        });
+    },
+
     async updateList(userId: string, listId: string, partial: Partial<TaskList>): Promise<void> {
         await dbService.updateDocument(`users/${userId}/taskLists`, listId, partial);
     },

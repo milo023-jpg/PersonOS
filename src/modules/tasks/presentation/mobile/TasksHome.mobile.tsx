@@ -3,6 +3,7 @@ import { motion } from 'framer-motion';
 import { useAuthStore } from '../../../auth/application/store/authStore';
 import { useTasksStore } from '../../application/store/tasksStore';
 import { useTaskListsStore } from '../../application/store/taskListsStore';
+import { GENERAL_LIST_ID } from '../../domain/constants/defaults';
 import { useTasksMobileNavigation } from './MobileNavigationContext';
 import InlineTaskCreator from '../components/TaskList/InlineTaskCreator';
 import { isDueBeforeOrToday, toTaskDateTimestamp } from '../../domain/utils/taskDate';
@@ -22,16 +23,15 @@ export default function TasksHomeMobile() {
         }
     }, [userId, fetchTasks, fetchLists]);
 
-    const inboxCount = tasks.filter(t => t.isInbox && t.status !== 'completed').length;
     const todayCount = tasks.filter(t => {
-        if (t.status === 'completed' || t.isInbox) return false;
+        if (t.status === 'completed') return false;
         const isUnscheduledHighPriority = toTaskDateTimestamp(t.dueDate) === undefined && (t.priority === 'high' || t.priority === 'urgent');
         return isDueBeforeOrToday(t.dueDate) || isUnscheduledHighPriority;
     }).length;
     const allCount = tasks.filter(t => t.status !== 'completed').length;
+    const generalCount = tasks.filter(t => t.listId === GENERAL_LIST_ID && t.status !== 'completed').length;
 
     const smartViews = [
-        { id: 'inbox', label: 'Inbox', icon: '📥', count: inboxCount },
         { id: 'today', label: 'Hoy', icon: '⭐', count: todayCount },
         { id: 'all', label: 'Todas', icon: '📋', count: allCount },
     ];
@@ -83,7 +83,10 @@ export default function TasksHomeMobile() {
                             >
                                 <div className="flex items-center gap-3">
                                     <div className={`w-4 h-4 rounded-full ${list.color}`}></div>
-                                    <span className="font-bold text-text-primary">{list.name}</span>
+                                    <div className="flex items-center gap-2">
+                                        <span className="font-bold text-text-primary">{list.name}</span>
+                                        {list.id === GENERAL_LIST_ID}
+                                    </div>
                                 </div>
                                 <div className="flex items-center gap-2">
                                     <span className="text-sm text-text-secondary bg-gray-100 dark:bg-gray-700 px-2 py-1 rounded-full">
@@ -97,6 +100,9 @@ export default function TasksHomeMobile() {
                         );
                     })}
                 </div>
+                <p className="mt-3 text-xs font-medium text-text-secondary">
+                    General agrupa tareas sin una lista específica. {generalCount > 0 ? `${generalCount} activas por organizar.` : 'No hay tareas sin organizar.'}
+                </p>
             </div>
 
             {/* Botón flotante */}

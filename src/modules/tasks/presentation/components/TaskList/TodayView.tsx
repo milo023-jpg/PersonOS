@@ -5,6 +5,7 @@ import InlineTaskCreator from './InlineTaskCreator';
 import { AnimatePresence } from 'framer-motion';
 import type { Task } from '../../../domain/models/Task';
 import { getDayRange, isDueBeforeOrToday, toTaskDateTimestamp } from '../../../domain/utils/taskDate';
+import { SystemScrollArea } from '../../../../../shared/ui/SystemScrollArea';
 
 interface Props {
   onSelectTask: (task: Task) => void;
@@ -13,10 +14,16 @@ interface Props {
 export default function TodayView({ onSelectTask }: Props) {
     const { tasks } = useTasksStore();
     const [isCreating, setIsCreating] = useState(false);
+    const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
+    const [isOverdueExpanded, setIsOverdueExpanded] = useState(true);
     const { start: startOfToday, end: endOfToday } = getDayRange();
 
+    const handleEditSelect = (task: Task) => {
+        setEditingTaskId(task.id);
+        onSelectTask(task);
+    };
+
     const todayTasks = tasks.filter(t => {
-        if (t.isInbox) return false;
         if (t.status === 'completed') return false;
 
         const isUnscheduledHighPriority =
@@ -48,8 +55,126 @@ export default function TodayView({ onSelectTask }: Props) {
     });
 
     return (
-        <div className="absolute inset-0 flex flex-col p-6 max-w-6xl mx-auto w-full gap-8 overflow-hidden h-full">
-            <div className={`grid grid-cols-1 ${overdueTasks.length > 0 ? 'xl:grid-cols-2' : ''} gap-8 items-start w-full h-full min-h-0`}>
+        <div className="w-full h-full flex flex-col overflow-hidden">
+            {/* Móviles: scroll global en una columna */}
+            <SystemScrollArea className="lg:hidden w-full h-full flex flex-col p-6 max-w-3xl mx-auto gap-8">
+                {/* Atrasadas - Colapsable en móviles */}
+                {overdueTasks.length > 0 && (
+                    <section className="w-full flex flex-col gap-4">
+                        <button
+                            onClick={() => setIsOverdueExpanded(!isOverdueExpanded)}
+                            className="flex items-center justify-between shrink-0 hover:bg-gray-50 dark:hover:bg-gray-800/50 p-2 rounded-lg transition-colors"
+                        >
+                            <h3 className="text-sm font-black text-red-500 uppercase tracking-wider flex items-center gap-2">
+                                <span>Atrasadas</span>
+                                <span className="bg-red-500/10 text-red-500 px-2 rounded-md">{overdueTasks.length}</span>
+                            </h3>
+                            <svg 
+                                className={`w-5 h-5 text-text-secondary transition-transform ${isOverdueExpanded ? 'rotate-180' : ''}`}
+                                fill="none" 
+                                stroke="currentColor" 
+                                viewBox="0 0 24 24"
+                            >
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 14l-7-7-7 7"></path>
+                            </svg>
+                        </button>
+                        {isOverdueExpanded && (
+                            <div className="flex flex-col gap-3">
+                                <AnimatePresence>
+                                    {overdueTasks.map(t => (
+                                        t.id === editingTaskId ? (
+                                            <div key={t.id} className="w-full">
+                                                <InlineTaskCreator editTask={t} onCancel={() => setEditingTaskId(null)} />
+                                            </div>
+                                        ) : (
+                                            <TaskItem key={t.id} task={t} onSelect={handleEditSelect} />
+                                        )
+                                    ))}
+                                </AnimatePresence>
+                            </div>
+                        )}
+                    </section>
+                )}
+
+                {/* Para Hoy - Siempre desplegado */}
+                <section className="w-full flex flex-col gap-4">
+                    <h3 className="text-sm font-black text-text-secondary uppercase tracking-wider flex items-center justify-between shrink-0">
+                        <span>Para Hoy</span>
+                        <span className="bg-gray-100 dark:bg-surface px-2 rounded-md">{pendingTodayTasks.length}</span>
+                    </h3>
+                    
+                    {todayTasks.length === 0 ? (
+                        <div className="py-10 flex flex-col items-center justify-center gap-2 border-2 border-dashed border-gray-100 dark:border-gray-800 rounded-2xl">
+                            <span className="text-3xl mb-2">🎉</span>
+                            <p className="font-bold text-text-secondary text-sm">Todo al día por hoy</p>
+                        </div>
+                    ) : pendingTodayTasks.length === 0 ? (
+                        <div className="py-6 flex flex-col items-center justify-center border-2 border-dashed border-gray-100 dark:border-gray-800 rounded-2xl">
+                            <span className="text-xl mb-1">👍</span>
+                            <p className="font-bold text-text-secondary text-xs">No hay más tareas para hoy</p>
+                        </div>
+                    ) : (
+                        <div className="flex flex-col gap-3">
+                            <AnimatePresence>
+                                {pendingTodayTasks.map(t => (
+                                    t.id === editingTaskId ? (
+                                        <div key={t.id} className="w-full">
+                                            <InlineTaskCreator editTask={t} onCancel={() => setEditingTaskId(null)} />
+                                        </div>
+                                    ) : (
+                                        <TaskItem key={t.id} task={t} onSelect={handleEditSelect} />
+                                    )
+                                ))}
+                            </AnimatePresence>
+                        </div>
+                    )}
+
+                    <div>
+                        {isCreating ? (
+                            <InlineTaskCreator 
+                                onCancel={() => setIsCreating(false)} 
+                                defaultDate={Date.now()}
+                            />
+                        ) : (
+                            <button 
+                                onClick={() => setIsCreating(true)}
+                                className="w-full text-left py-3 px-4 mt-2 rounded-xl text-text-secondary hover:text-primary font-bold transition-all flex items-center gap-2 hover:bg-gray-50 dark:hover:bg-gray-800/50 group"
+                            >
+                                <svg className="w-5 h-5 text-primary opacity-70 group-hover:opacity-100 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path></svg>
+                                Añadir tarea
+                            </button>
+                        )}
+                    </div>
+
+                    {completedToday.length > 0 && (
+                        <div className="mt-8">
+                            <h3 className="text-sm font-black text-text-secondary uppercase tracking-wider mb-4 flex items-center justify-between">
+                                <span>Completadas</span>
+                                <span className="bg-gray-100 dark:bg-surface px-2 rounded-md text-success">{completedToday.length}</span>
+                            </h3>
+                            
+                            <div className="flex flex-col gap-3">
+                                <AnimatePresence>
+                                    {completedToday.slice(0, 5).map(t => (
+                                        t.id === editingTaskId ? (
+                                            <div key={t.id} className="w-full">
+                                                <InlineTaskCreator editTask={t} onCancel={() => setEditingTaskId(null)} />
+                                            </div>
+                                        ) : (
+                                            <TaskItem key={t.id} task={t} onSelect={handleEditSelect} />
+                                        )
+                                    ))}
+                                </AnimatePresence>
+                            </div>
+                        </div>
+                    )}
+                </section>
+
+                <div className="h-6"></div>
+            </SystemScrollArea>
+
+            {/* Escritorio: dos columnas con scrolls independientes */}
+            <div className="hidden lg:grid grid-cols-1 xl:grid-cols-2 gap-8 items-start w-full h-full min-h-0 p-6 max-w-6xl mx-auto overflow-hidden">
                 
                 {/* Columna Izquierda: Atrasadas */}
                 {overdueTasks.length > 0 && (
@@ -58,13 +183,19 @@ export default function TodayView({ onSelectTask }: Props) {
                             <span>Atrasadas</span>
                             <span className="bg-red-500/10 text-red-500 px-2 rounded-md">{overdueTasks.length}</span>
                         </h3>
-                        <div className="flex flex-col gap-3 overflow-y-auto custom-scrollbar pr-2 pb-6">
+                        <SystemScrollArea className="flex flex-col gap-3 pr-2 pb-6">
                             <AnimatePresence>
                                 {overdueTasks.map(t => (
-                                    <TaskItem key={t.id} task={t} onSelect={onSelectTask} />
+                                    t.id === editingTaskId ? (
+                                        <div key={t.id} className="w-full">
+                                            <InlineTaskCreator editTask={t} onCancel={() => setEditingTaskId(null)} />
+                                        </div>
+                                    ) : (
+                                        <TaskItem key={t.id} task={t} onSelect={handleEditSelect} />
+                                    )
                                 ))}
                             </AnimatePresence>
-                        </div>
+                        </SystemScrollArea>
                     </section>
                 )}
 
@@ -75,7 +206,7 @@ export default function TodayView({ onSelectTask }: Props) {
                         <span className="bg-gray-100 dark:bg-surface px-2 rounded-md">{pendingTodayTasks.length}</span>
                     </h3>
                     
-                    <div className="flex flex-col gap-3 overflow-y-auto custom-scrollbar pr-2 pb-6">
+                    <SystemScrollArea className="flex flex-col gap-3 pr-2 pb-6">
                         {todayTasks.length === 0 ? (
                             <div className="py-10 flex flex-col items-center justify-center gap-2 border-2 border-dashed border-gray-100 dark:border-gray-800 rounded-2xl mb-4 shrink-0">
                                 <span className="text-3xl mb-2">🎉</span>
@@ -90,7 +221,13 @@ export default function TodayView({ onSelectTask }: Props) {
                             <div className="flex flex-col gap-3 mb-4 shrink-0">
                                 <AnimatePresence>
                                     {pendingTodayTasks.map(t => (
-                                        <TaskItem key={t.id} task={t} onSelect={onSelectTask} />
+                                        t.id === editingTaskId ? (
+                                            <div key={t.id} className="w-full">
+                                                <InlineTaskCreator editTask={t} onCancel={() => setEditingTaskId(null)} />
+                                            </div>
+                                        ) : (
+                                            <TaskItem key={t.id} task={t} onSelect={handleEditSelect} />
+                                        )
                                     ))}
                                 </AnimatePresence>
                             </div>
@@ -123,13 +260,19 @@ export default function TodayView({ onSelectTask }: Props) {
                                 <div className="flex flex-col gap-3">
                                     <AnimatePresence>
                                         {completedToday.slice(0, 5).map(t => (
-                                            <TaskItem key={t.id} task={t} onSelect={onSelectTask} />
+                                            t.id === editingTaskId ? (
+                                                <div key={t.id} className="w-full">
+                                                    <InlineTaskCreator editTask={t} onCancel={() => setEditingTaskId(null)} />
+                                                </div>
+                                            ) : (
+                                                <TaskItem key={t.id} task={t} onSelect={handleEditSelect} />
+                                            )
                                         ))}
                                     </AnimatePresence>
                                 </div>
                             </div>
                         )}
-                    </div>
+                    </SystemScrollArea>
                 </section>
             </div>
         </div>

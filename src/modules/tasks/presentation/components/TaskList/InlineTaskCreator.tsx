@@ -3,6 +3,7 @@ import { useAuthStore } from '../../../../auth/application/store/authStore';
 import { useTasksStore } from '../../../application/store/tasksStore';
 import { useTaskListsStore } from '../../../application/store/taskListsStore';
 import { useContextsStore } from '../../../../contexts/application/store/contextsStore';
+import { GENERAL_LIST_ID } from '../../../domain/constants/defaults';
 import type { Task, TaskPriority, TaskStatus } from '../../../domain/models/Task';
 import DatePickerPopover from './DatePickerPopover';
 
@@ -27,6 +28,8 @@ export default function InlineTaskCreator({ onCancel, defaultContextId, defaultL
     const { addTask, updateTask } = useTasksStore();
     const { lists } = useTaskListsStore();
     const { contexts, fetchContexts } = useContextsStore();
+    
+    const [isLoading, setIsLoading] = useState(false);
 
     useEffect(() => {
         if (userId) {
@@ -50,7 +53,7 @@ export default function InlineTaskCreator({ onCancel, defaultContextId, defaultL
     
     // Selectors
     const [isListOpen, setIsListOpen] = useState(false);
-    const [selectedListId, setSelectedListId] = useState<string | undefined>(editTask?.listId || defaultListId);
+    const [selectedListId, setSelectedListId] = useState<string>(editTask?.listId || defaultListId || GENERAL_LIST_ID);
 
     const [isContextOpen, setIsContextOpen] = useState(false);
     const [selectedContextId, setSelectedContextId] = useState<string | undefined>(editTask?.contextId || defaultContextId);
@@ -84,15 +87,16 @@ export default function InlineTaskCreator({ onCancel, defaultContextId, defaultL
     const handleAdd = async (e?: React.FormEvent | React.MouseEvent) => {
         if (e) e.preventDefault();
         
-        if (!title.trim() || !userId) return;
+        if (!title.trim() || !userId || isLoading) return;
 
+        setIsLoading(true);
         try {
             const updates: Partial<Task> = {
                 title: title.trim(),
                 priority,
                 updatedAt: Date.now(),
                 isImportant: priority === 'high' || priority === 'urgent',
-                isInbox: !selectedContextId && !selectedListId,
+                listId: selectedListId || GENERAL_LIST_ID,
             };
 
             const trimmedDesc = description.trim();
@@ -117,9 +121,6 @@ export default function InlineTaskCreator({ onCancel, defaultContextId, defaultL
             }
             
             updates.contextId = selectedContextId || undefined;
-            updates.listId = selectedListId || undefined;
-            
-            if (updates.listId) updates.isInbox = false; // Override
 
             if (editTask) {
                 await updateTask(userId, editTask.id, updates);
@@ -131,6 +132,7 @@ export default function InlineTaskCreator({ onCancel, defaultContextId, defaultL
                     createdAt: Date.now(),
                     isRecurring: false,
                     order: 0,
+                    source: 'manual',
                 };
                 await addTask(newTask);
             }
@@ -139,6 +141,7 @@ export default function InlineTaskCreator({ onCancel, defaultContextId, defaultL
             onCancel();
         } catch (error) {
             console.error("Error saving task:", error);
+            setIsLoading(false);
         }
     };
 
@@ -290,27 +293,27 @@ export default function InlineTaskCreator({ onCancel, defaultContextId, defaultL
                             {selectedListId ? (
                                 <>
                                     <div className={`w-3 h-3 rounded-full ${lists.find(l => l.id === selectedListId)?.color || 'bg-gray-400'}`}></div>
-                                    {lists.find(l => l.id === selectedListId)?.name || 'Lista no encontrada'}
+                                    {lists.find(l => l.id === selectedListId)?.name || 'General'}
                                 </>
                             ) : (
                                 <>
                                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4"></path></svg>
-                                    Bandeja de entrada
+                                    General
                                 </>
                             )}
                         </button>
                         {isListOpen && (
-                            <div className="absolute bottom-full left-0 mb-2 bg-white dark:bg-[#1a1a24] border border-gray-200 dark:border-white/10 rounded-2xl shadow-xl z-[60] overflow-hidden w-56 max-h-64 overflow-y-auto p-1 flex flex-col gap-1">
+                            <div className="absolute bottom-full left-0 mb-2 bg-white dark:bg-[#1a1a24] border border-gray-200 dark:border-white/10 rounded-2xl shadow-xl z-[60] overflow-hidden w-56 max-h-64 overflow-y-auto system-scroll p-1 flex flex-col gap-1">
                                 <button
                                     type="button"
                                     onClick={() => {
-                                        setSelectedListId(undefined);
+                                        setSelectedListId(GENERAL_LIST_ID);
                                         setIsListOpen(false);
                                     }}
                                     className="w-full text-left px-3 py-2 text-sm font-bold rounded-xl hover:bg-gray-100 dark:hover:bg-white/10 flex items-center gap-3 text-gray-500 dark:text-gray-400"
                                 >
                                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4"></path></svg>
-                                    Bandeja de entrada
+                                    General
                                 </button>
                                 {lists.map(list => (
                                     <button
@@ -352,7 +355,7 @@ export default function InlineTaskCreator({ onCancel, defaultContextId, defaultL
                             )}
                         </button>
                         {isContextOpen && (
-                            <div className="absolute bottom-full left-0 mb-2 bg-white dark:bg-[#1a1a24] border border-gray-200 dark:border-white/10 rounded-2xl shadow-xl z-[60] overflow-hidden w-56 max-h-64 overflow-y-auto p-1 flex flex-col gap-1">
+                            <div className="absolute bottom-full left-0 mb-2 bg-white dark:bg-[#1a1a24] border border-gray-200 dark:border-white/10 rounded-2xl shadow-xl z-[60] overflow-hidden w-56 max-h-64 overflow-y-auto system-scroll p-1 flex flex-col gap-1">
                                 <button
                                     type="button"
                                     onClick={() => {
@@ -387,20 +390,31 @@ export default function InlineTaskCreator({ onCancel, defaultContextId, defaultL
                     <button 
                         type="button"
                         onClick={onCancel}
-                        className="px-5 py-2 text-sm font-bold text-text-secondary hover:bg-gray-100 dark:hover:bg-white/10 rounded-full transition-colors"
+                        disabled={isLoading}
+                        className="px-5 py-2 text-sm font-bold text-text-secondary hover:bg-gray-100 dark:hover:bg-white/10 rounded-full transition-colors disabled:opacity-50"
                     >
                         Cancelar
                     </button>
                     <button 
                         type="button"
                         onClick={handleAdd}
-                        disabled={!title.trim()}
+                        disabled={!title.trim() || isLoading}
                         className="px-6 py-2 text-sm font-bold text-white rounded-full 
                                    bg-gradient-to-r from-[#A04AF9] to-[#C33FFF] hover:from-[#8f41e5] hover:to-[#b43aeb]
                                    shadow-[0_0_15px_rgba(160,74,249,0.4)] disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-none
-                                   transition-all active:scale-95"
+                                   transition-all active:scale-95 flex items-center gap-2"
                     >
-                        {editTask ? 'Guardar Cambios' : 'Añadir Tarea'}
+                        {isLoading ? (
+                            <>
+                                <svg className="w-4 h-4 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <circle cx="12" cy="12" r="1" fill="currentColor" />
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 2v4m0 12v4" opacity="0.3" />
+                                </svg>
+                                Guardando...
+                            </>
+                        ) : (
+                            editTask ? 'Guardar Cambios' : 'Añadir Tarea'
+                        )}
                     </button>
                 </div>
             </div>

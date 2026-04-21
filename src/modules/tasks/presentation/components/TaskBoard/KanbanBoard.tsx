@@ -8,6 +8,7 @@ import type { Task, TaskStatus } from '../../../domain/models/Task';
 import { useAuthStore } from '../../../../auth/application/store/authStore';
 import InlineTaskCreator from '../TaskList/InlineTaskCreator';
 import { useState } from 'react';
+import { SystemScrollArea } from '../../../../../shared/ui/SystemScrollArea';
 
 interface Props {
   onSelectTask: (task: Task) => void;
@@ -125,7 +126,7 @@ function KanbanColumn({
                 </select>
             </div>
             {/* Scroll oculto */}
-            <div className="flex-1 overflow-y-auto flex flex-col gap-4 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
+            <SystemScrollArea className="flex-1 flex flex-col gap-4">
                 <SortableContext items={tasks.map((task) => task.id)} strategy={verticalListSortingStrategy}>
                     {tasks.map(t => (
                         <SortableTask key={t.id} task={t} onSelect={onSelectTask} />
@@ -153,7 +154,7 @@ function KanbanColumn({
                         Añadir tarea
                     </button>
                 )}
-            </div>
+            </SystemScrollArea>
         </div>
     );
 }
@@ -260,7 +261,7 @@ export default function KanbanBoard({ onSelectTask }: Props) {
     }));
 
     return (
-        <div className="absolute inset-0 p-6 flex gap-6 overflow-x-auto w-full h-full pb-6">
+        <SystemScrollArea direction="x" className="absolute inset-0 p-6 flex gap-6 w-full h-full pb-6">
             <DndContext collisionDetection={closestCorners} onDragStart={handleDragStart} onDragEnd={handleDragEnd} onDragCancel={() => setActiveTask(null)}>
                 {orderedColumns.map(col => {
                     return (
@@ -284,6 +285,6 @@ export default function KanbanBoard({ onSelectTask }: Props) {
                     ) : null}
                 </DragOverlay>
             </DndContext>
-        </div>
+        </SystemScrollArea>
     );
 }

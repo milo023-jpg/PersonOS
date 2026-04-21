@@ -76,7 +76,7 @@ export default function HabitsPage() {
             </div>
 
             {/* Categorías / Filtros */}
-            <div className="flex gap-3 overflow-x-auto pb-2">
+            <div className="flex gap-3 overflow-x-auto pb-2 system-scroll">
                 <button onClick={() => setFilter('all')} className={`px-5 py-2 rounded-full font-bold text-sm shadow-sm transition-all ${filter === 'all' ? 'bg-primary text-white' : 'bg-white dark:bg-surface text-text-secondary hover:bg-gray-50 dark:hover:bg-background border border-gray-200 dark:border-transparent'}`}>Todos</button>
                 <button onClick={() => setFilter('daily')} className={`px-5 py-2 rounded-full font-bold text-sm transition-all ${filter === 'daily' ? 'bg-primary text-white shadow-sm' : 'bg-white dark:bg-surface text-text-secondary hover:bg-gray-50 dark:hover:bg-background border border-gray-200 dark:border-transparent'}`}>Diarios</button>
                 <button onClick={() => setFilter('weekly')} className={`px-5 py-2 rounded-full font-bold text-sm transition-all ${filter === 'weekly' ? 'bg-primary text-white shadow-sm' : 'bg-white dark:bg-surface text-text-secondary hover:bg-gray-50 dark:hover:bg-background border border-gray-200 dark:border-transparent'}`}>Semanales</button>
