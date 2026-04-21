@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import type { Task, TaskStatus } from '../../domain/models/Task';
+import type { Subtask, Task, TaskStatus } from '../../domain/models/Task';
 import { GENERAL_LIST_ID } from '../../domain/constants/defaults';
 import { taskRepository } from '../../infrastructure/repositories/taskRepository';
 
@@ -7,7 +7,8 @@ function normalizeTask(task: Task): Task {
     return {
         ...task,
         listId: task.listId || GENERAL_LIST_ID,
-        source: task.source || 'manual'
+        source: task.source || 'manual',
+        subtasks: task.subtasks ?? [],
     };
 }
 
@@ -24,8 +25,13 @@ interface TasksState {
     deleteTask: (userId: string, taskId: string) => Promise<void>;
     
     // Acciones de conveniencia (usan updateTask internamente)
-    toggleTaskImportance: (userId: string, taskId: string) => Promise<void>;
     moveTaskStatus: (userId: string, taskId: string, newStatus: TaskStatus) => Promise<void>;
+
+    // Subtareas
+    addSubtask: (userId: string, taskId: string, title: string) => Promise<void>;
+    toggleSubtask: (userId: string, taskId: string, subtaskId: string) => Promise<void>;
+    editSubtask: (userId: string, taskId: string, subtaskId: string, newTitle: string) => Promise<void>;
+    deleteSubtask: (userId: string, taskId: string, subtaskId: string) => Promise<void>;
 }
 
 export const useTasksStore = create<TasksState>((set, get) => ({
@@ -122,13 +128,6 @@ export const useTasksStore = create<TasksState>((set, get) => ({
         }
     },
 
-    toggleTaskImportance: async (userId, taskId) => {
-        const task = get().tasks.find(t => t.id === taskId);
-        if (task) {
-            await get().updateTask(userId, taskId, { isImportant: !task.isImportant });
-        }
-    },
-
     moveTaskStatus: async (userId, taskId, newStatus) => {
         const payload: Partial<Task> = { status: newStatus };
         if (newStatus === 'completed') {
@@ -137,5 +136,59 @@ export const useTasksStore = create<TasksState>((set, get) => ({
             payload.completedAt = null as any; 
         }
         await get().updateTask(userId, taskId, payload);
-    }
+    },
+
+    addSubtask: async (userId, taskId, title) => {
+        const task = get().tasks.find(t => t.id === taskId);
+        if (!task) return;
+
+        const newSubtask: Subtask = {
+            id: crypto.randomUUID(),
+            title: title.trim(),
+            completed: false,
+            createdAt: Date.now(),
+        };
+
+        const updatedSubtasks = [...(task.subtasks ?? []), newSubtask];
+        await get().updateTask(userId, taskId, { subtasks: updatedSubtasks });
+    },
+
+    toggleSubtask: async (userId, taskId, subtaskId) => {
+        const task = get().tasks.find(t => t.id === taskId);
+        if (!task) return;
+
+        const updatedSubtasks = (task.subtasks ?? []).map(s =>
+            s.id === subtaskId ? { ...s, completed: !s.completed } : s
+        );
+
+        const partial: Partial<Task> = { subtasks: updatedSubtasks };
+
+        // Auto-completar la tarea padre si todas las subtareas están completas
+        const allCompleted = updatedSubtasks.length > 0 && updatedSubtasks.every(s => s.completed);
+        if (allCompleted && task.status !== 'completed') {
+            partial.status = 'completed';
+            partial.completedAt = Date.now();
+        }
+
+        await get().updateTask(userId, taskId, partial);
+    },
+
+    editSubtask: async (userId, taskId, subtaskId, newTitle) => {
+        const task = get().tasks.find(t => t.id === taskId);
+        if (!task) return;
+
+        const updatedSubtasks = (task.subtasks ?? []).map(s =>
+            s.id === subtaskId ? { ...s, title: newTitle.trim() } : s
+        );
+
+        await get().updateTask(userId, taskId, { subtasks: updatedSubtasks });
+    },
+
+    deleteSubtask: async (userId, taskId, subtaskId) => {
+        const task = get().tasks.find(t => t.id === taskId);
+        if (!task) return;
+
+        const updatedSubtasks = (task.subtasks ?? []).filter(s => s.id !== subtaskId);
+        await get().updateTask(userId, taskId, { subtasks: updatedSubtasks });
+    },
 }));

@@ -72,7 +72,7 @@ export default function InboxPage() {
             source: 'inbox',
             isRecurring: false,
             order: 0,
-            isImportant: false,
+            subtasks: [],
         });
         await handleDelete(item.id);
     };

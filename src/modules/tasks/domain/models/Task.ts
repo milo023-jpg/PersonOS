@@ -1,6 +1,13 @@
 export type TaskStatus = 'todo' | 'in_progress' | 'completed' | 'archived';
 export type TaskPriority = 'low' | 'medium' | 'high' | 'urgent';
 
+export interface Subtask {
+  id: string;
+  title: string;
+  completed: boolean;
+  createdAt: number;
+}
+
 export interface RecurrenceRule {
   type: 'daily' | 'weekly' | 'monthly';
   interval: number;
@@ -34,8 +41,7 @@ export interface Task {
   actualTime?: number;
 
   order: number; // para drag & drop
-  
-  isImportant: boolean;
 
-  parentTaskId?: string; // para subtareas
+  parentTaskId?: string; // para subtareas entre documentos (futuro)
+  subtasks: Subtask[];   // subtareas embebidas (MVP)
 }

@@ -95,7 +95,6 @@ export default function InlineTaskCreator({ onCancel, defaultContextId, defaultL
                 title: title.trim(),
                 priority,
                 updatedAt: Date.now(),
-                isImportant: priority === 'high' || priority === 'urgent',
                 listId: selectedListId || GENERAL_LIST_ID,
             };
 
@@ -133,6 +132,7 @@ export default function InlineTaskCreator({ onCancel, defaultContextId, defaultL
                     isRecurring: false,
                     order: 0,
                     source: 'manual',
+                    subtasks: [],
                 };
                 await addTask(newTask);
             }

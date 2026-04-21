@@ -1,6 +1,6 @@
 import { useTasksStore } from '../../../application/store/tasksStore';
 import TaskItem from '../TaskList/TaskItem';
-import { DndContext, DragOverlay, closestCorners, useDroppable } from '@dnd-kit/core';
+import { DndContext, DragOverlay, closestCorners, useDroppable, MouseSensor, TouchSensor, useSensor, useSensors } from '@dnd-kit/core';
 import type { DragEndEvent, DragStartEvent } from '@dnd-kit/core';
 import { SortableContext, arrayMove, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
@@ -8,7 +8,11 @@ import type { Task, TaskStatus } from '../../../domain/models/Task';
 import { useAuthStore } from '../../../../auth/application/store/authStore';
 import InlineTaskCreator from '../TaskList/InlineTaskCreator';
 import { useState } from 'react';
+import { AnimatePresence, motion } from 'framer-motion';
 import { SystemScrollArea } from '../../../../../shared/ui/SystemScrollArea';
+
+// ... (omitiendo hasta SortDropdown)
+
 
 interface Props {
   onSelectTask: (task: Task) => void;
@@ -77,6 +81,99 @@ function SortableTask({ task, onSelect }: { task: Task, onSelect: (t: Task) => v
     );
 }
 
+
+function SortDropdown({ value, onChange }: { value: ColumnSort, onChange: (v: ColumnSort) => void }) {
+    const [isOpen, setIsOpen] = useState(false);
+    
+    const options: { value: ColumnSort, label: string, icon: React.ReactNode }[] = [
+        { 
+            value: 'manual', 
+            label: 'Manual', 
+            icon: <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 11.5V14m0-2.5v-6a1.5 1.5 0 113 0V12m3.024-4.5a1.5 1.5 0 113 0V15m-3.024-4.5V12m.024-9a1.5 1.5 0 10-3 0V12a3 3 0 106 0V6a1.5 1.5 0 10-3 0v.5M7 10a2 2 0 10-4 0v1a7 7 0 007 7h3a7 7 0 007-7V9a2 2 0 00-4 0" /></svg>
+        },
+        { 
+            value: 'updated_desc', 
+            label: 'Recientes', 
+            icon: <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+        },
+        { 
+            value: 'priority_desc', 
+            label: 'Prioridad', 
+            icon: <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
+        },
+        { 
+            value: 'due_asc', 
+            label: 'Fecha límite', 
+            icon: <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
+        },
+        { 
+            value: 'created_desc', 
+            label: 'Nuevas', 
+            icon: <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-7.714 2.143L11 21l-2.286-6.857L1 12l7.714-2.143L11 3z" /></svg>
+        },
+        { 
+            value: 'created_asc', 
+            label: 'Antiguas', 
+            icon: <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+        },
+    ];
+
+    const currentLabel = options.find(o => o.value === value)?.label || 'Manual';
+
+    return (
+        <div className="relative">
+            <button
+                onClick={() => setIsOpen(!isOpen)}
+                className="flex items-center gap-2 bg-white/50 dark:bg-white/5 hover:bg-white/80 dark:hover:bg-white/10 px-3 py-1.5 rounded-xl border border-gray-100 dark:border-white/5 transition-all duration-200 group shadow-sm active:scale-95"
+            >
+                <span className="text-[11px] uppercase tracking-wider font-black text-text-secondary group-hover:text-text-primary transition-colors">{currentLabel}</span>
+                <svg 
+                    className={`w-3 h-3 text-text-secondary transition-transform duration-300 ${isOpen ? 'rotate-180' : ''}`} 
+                    fill="none" stroke="currentColor" viewBox="0 0 24 24"
+                >
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M19 9l-7 7-7-7" />
+                </svg>
+            </button>
+
+            <AnimatePresence>
+                {isOpen && (
+                    <>
+                        <div className="fixed inset-0 z-40" onClick={() => setIsOpen(false)} />
+                        <motion.div
+                            initial={{ opacity: 0, scale: 0.95, y: -10 }}
+                            animate={{ opacity: 1, scale: 1, y: 0 }}
+                            exit={{ opacity: 0, scale: 0.95, y: -10 }}
+                            className="absolute right-0 mt-2 w-48 bg-white/95 dark:bg-zinc-900/95 backdrop-blur-2xl border border-gray-200/50 dark:border-white/10 rounded-2xl shadow-2xl p-1.5 z-50 overflow-hidden"
+                        >
+                            <div className="flex flex-col gap-1">
+                                {options.map((opt) => (
+                                    <button
+                                        key={opt.value}
+                                        onClick={() => {
+                                            onChange(opt.value);
+                                            setIsOpen(false);
+                                        }}
+                                        className={`w-full flex items-center gap-3 px-3 py-2 rounded-xl text-xs font-bold transition-all duration-200 ${
+                                            value === opt.value
+                                                ? 'bg-primary text-white shadow-lg shadow-primary/20'
+                                                : 'text-text-secondary dark:text-gray-400 hover:text-text-primary dark:hover:text-white hover:bg-gray-100 dark:hover:bg-white/5'
+                                        }`}
+                                    >
+                                        <div className={value === opt.value ? 'text-white' : 'text-primary dark:text-primary-light'}>
+                                            {opt.icon}
+                                        </div>
+                                        {opt.label}
+                                    </button>
+                                ))}
+                            </div>
+                        </motion.div>
+                    </>
+                )}
+            </AnimatePresence>
+        </div>
+    );
+}
+
 function KanbanColumn({
     id,
     title,
@@ -100,7 +197,7 @@ function KanbanColumn({
     });
 
     return (
-        <div ref={setNodeRef} className={`flex-shrink-0 w-80 h-full flex flex-col rounded-2xl border ${color} p-4 transition-colors ${isOver ? 'ring-2 ring-primary border-primary bg-primary/5' : ''}`}>
+        <div ref={setNodeRef} className={`flex-shrink-0 w-96 h-full flex flex-col rounded-2xl border ${color} p-4 transition-colors ${isOver ? 'ring-2 ring-primary border-primary bg-primary/5' : ''}`}>
             <div className="mb-4 flex items-start justify-between gap-3">
                 <div className="flex items-center gap-2">
                     <h3 className="font-bold text-text-primary">
@@ -111,19 +208,10 @@ function KanbanColumn({
                     </span>
                 </div>
 
-                <select
-                    value={sort}
-                    onChange={(e) => onSortChange(e.target.value as ColumnSort)}
-                    className="bg-white dark:bg-background border border-gray-200 dark:border-gray-800 rounded-lg px-2 py-1 text-xs font-bold text-text-secondary focus:outline-none"
-                    title="Ordenar tareas"
-                >
-                    <option value="manual">Manual</option>
-                    <option value="updated_desc">Recientes</option>
-                    <option value="created_desc">Nuevas primero</option>
-                    <option value="created_asc">Antiguas primero</option>
-                    <option value="priority_desc">Prioridad</option>
-                    <option value="due_asc">Fecha límite</option>
-                </select>
+                <SortDropdown 
+                    value={sort} 
+                    onChange={onSortChange} 
+                />
             </div>
             {/* Scroll oculto */}
             <SystemScrollArea className="flex-1 flex flex-col gap-4">
@@ -163,6 +251,22 @@ export default function KanbanBoard({ onSelectTask }: Props) {
     const { userId } = useAuthStore();
     const { tasks, updateTasksBulk } = useTasksStore();
     const [activeTask, setActiveTask] = useState<Task | null>(null);
+
+    // Sensores con restricciones para permitir interacción con botones internos
+    const sensors = useSensors(
+        useSensor(MouseSensor, {
+            activationConstraint: {
+                distance: 5,
+            },
+        }),
+        useSensor(TouchSensor, {
+            activationConstraint: {
+                delay: 250,
+                tolerance: 5,
+            },
+        })
+    );
+
     const [columnSorts, setColumnSorts] = useState<Record<TaskStatus, ColumnSort>>({
         todo: 'manual',
         in_progress: 'manual',
@@ -171,9 +275,9 @@ export default function KanbanBoard({ onSelectTask }: Props) {
     });
 
     const columns: { id: TaskStatus, title: string, color: string }[] = [
-        { id: 'todo', title: 'To Do', color: 'bg-gray-100 dark:bg-surface border-gray-200 dark:border-gray-800' },
-        { id: 'in_progress', title: 'In Progress', color: 'bg-blue-50/50 dark:bg-blue-900/10 border-blue-100 dark:border-blue-900/30' },
-        { id: 'completed', title: 'Completed', color: 'bg-green-50/50 dark:bg-green-900/10 border-green-100 dark:border-green-900/30' }
+        { id: 'todo', title: 'Pendientes', color: 'bg-gray-100 dark:bg-surface border-gray-200 dark:border-gray-800' },
+        { id: 'in_progress', title: 'En Curso', color: 'bg-blue-50/50 dark:bg-blue-900/10 border-blue-100 dark:border-blue-900/30' },
+        { id: 'completed', title: 'Completado', color: 'bg-green-50/50 dark:bg-green-900/10 border-green-100 dark:border-green-900/30' }
     ];
 
     const getColumnTasks = (status: TaskStatus) => sortTasks(tasks.filter((task) => task.status === status), columnSorts[status]);
@@ -261,8 +365,14 @@ export default function KanbanBoard({ onSelectTask }: Props) {
     }));
 
     return (
-        <SystemScrollArea direction="x" className="absolute inset-0 p-6 flex gap-6 w-full h-full pb-6">
-            <DndContext collisionDetection={closestCorners} onDragStart={handleDragStart} onDragEnd={handleDragEnd} onDragCancel={() => setActiveTask(null)}>
+        <SystemScrollArea direction="x" className="absolute inset-0 p-6 flex justify-center gap-6 w-full h-full pb-6">
+            <DndContext 
+                sensors={sensors}
+                collisionDetection={closestCorners} 
+                onDragStart={handleDragStart} 
+                onDragEnd={handleDragEnd} 
+                onDragCancel={() => setActiveTask(null)}
+            >
                 {orderedColumns.map(col => {
                     return (
                         <KanbanColumn 
@@ -279,7 +389,7 @@ export default function KanbanBoard({ onSelectTask }: Props) {
                 })}
                 <DragOverlay>
                     {activeTask ? (
-                        <div className="w-80 rotate-1 scale-[1.01] drop-shadow-2xl">
+                        <div className="w-96 rotate-1 scale-[1.01] drop-shadow-2xl">
                             <TaskItem task={activeTask} onSelect={onSelectTask} />
                         </div>
                     ) : null}

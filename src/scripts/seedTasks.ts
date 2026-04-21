@@ -1,101 +1,110 @@
 import { db } from '../services/firebase';
 import { collection, getDocs, writeBatch, doc } from 'firebase/firestore';
 import { GENERAL_LIST_ID } from '../modules/tasks/domain/constants/defaults';
+import type { Subtask, Task } from '../modules/tasks/domain/models/Task';
 
+/**
+ * Script de Seed para repoblar la base de datos de tareas.
+ * Borra las tareas existentes pero RESPETA las listas del usuario.
+ * Distribuye nuevas tareas de prueba entre las listas actuales.
+ */
 export async function seedDBWithLists(userId: string) {
     if (!userId) return;
 
-    // 1. Borrar tareas actuales
+    console.log("Reiniciando tareas para el usuario:", userId);
+
+    // 1. Obtener las listas existentes para saber a dónde asignar tareas
+    const listsRef = collection(db, `users/${userId}/taskLists`);
+    const listsSnapshot = await getDocs(listsRef);
+    let listIds = listsSnapshot.docs.map(d => d.id);
+
+    // Fallback si no hay listas (aunque siempre debería haber una por defecto)
+    if (listIds.length === 0) {
+        listIds = [GENERAL_LIST_ID];
+    }
+
+    // 2. Borrar tareas actuales
     const tasksRef = collection(db, `users/${userId}/tasks`);
     const tasksSnapshot = await getDocs(tasksRef);
     const batchDeleteTasks = writeBatch(db);
     tasksSnapshot.forEach(d => batchDeleteTasks.delete(d.ref));
     await batchDeleteTasks.commit();
+    console.log("✓ Tareas antiguas eliminadas. Listas respetadas:", listIds.length);
 
-    // 2. Borrar listas actuales
-    const listsRef = collection(db, `users/${userId}/taskLists`);
-    const listsSnapshot = await getDocs(listsRef);
-    const batchDeleteLists = writeBatch(db);
-    listsSnapshot.forEach(d => batchDeleteLists.delete(d.ref));
-    await batchDeleteLists.commit();
-
-    // 3. Crear nuevas listas semillas
-    const predefinedLists = [
-        { id: GENERAL_LIST_ID, name: 'General', color: 'bg-emerald-500', isDefault: true },
-        { name: '🛠️ Proyecto Personal OS', color: 'bg-primary' },
-        { name: '🛒 Compras de la casa', color: 'bg-emerald-500' },
-        { name: '📚 Universidad / Cursos', color: 'bg-blue-500' },
-    ];
-
-    const listsBatch = writeBatch(db);
-    const listIds: string[] = [];
-
-    predefinedLists.forEach((list, index) => {
-        const lRef = 'id' in list ? doc(listsRef, list.id) : doc(listsRef);
-        listIds.push(lRef.id);
-        listsBatch.set(lRef, {
-            ...list,
-            id: lRef.id,
-            userId,
-            order: index,
-            createdAt: Date.now()
-        });
-    });
-    await listsBatch.commit();
-
-    // 4. Crear tareas y asignarlas a las listas (Entre 17 y 22 de abril)
-    const baseDate = new Date("2026-04-17T12:00:00.000Z").getTime();
+    // 3. Crear tareas nuevas (alrededor de la fecha actual)
+    const now = new Date();
+    const baseDate = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 12).getTime();
     const dayMillis = 24 * 60 * 60 * 1000;
     const taskBatch = writeBatch(db);
 
-    for (let i = 1; i <= 15; i++) {
-        // Random offset entre 0 y 5 días (17 + 5 = 22 de abril)
-        const offsetDays = Math.floor(Math.random() * 6);
-        const isCompleted = i <= 3;
-        const dueDate = baseDate + (offsetDays * dayMillis);
-        const randomListId = listIds[i % listIds.length];
+    const taskTitles = [
+        "Finalizar módulo de subtareas",
+        "Comprar suministros semanales",
+        "Subir cambios a producción",
+        "Revisar pendientes del backlog",
+        "Entrenamiento de hoy 🏋️",
+        "Lavar el coche",
+        "Pagar servicios públicos",
+        "Llamar al médico",
+        "Organizar archivos del proyecto",
+        "Comprar regalo de aniversario",
+        "Estudiar patrones de arquitectura",
+        "Preparar cena premium",
+        "Actualizar documentación",
+        "Reunión de sincronización",
+        "Limpiar el escritorio",
+    ];
+
+    for (let i = 0; i < taskTitles.length; i++) {
+        // Distribución de fechas
+        const dateRoll = Math.random();
+        let dueDate: number | undefined;
+        if (dateRoll < 0.4) dueDate = baseDate; // Hoy
+        else if (dateRoll < 0.7) dueDate = baseDate + dayMillis; // Mañana
+        else if (dateRoll < 0.9) dueDate = baseDate - dayMillis; // Ayer
         
-        const t = {
+        const isCompleted = Math.random() < 0.2;
+        const randomListId = listIds[Math.floor(Math.random() * listIds.length)];
+        
+        // Crear subtareas realistas
+        const subtasks: Subtask[] = [];
+        if (i % 3 === 0) {
+            const subCount = 3 + Math.floor(Math.random() * 3);
+            for (let j = 1; j <= subCount; j++) {
+                subtasks.push({
+                    id: crypto.randomUUID(),
+                    title: `Sub-item ${j} de ${taskTitles[i].toLowerCase()}`,
+                    completed: j === 1 && !isCompleted,
+                    createdAt: Date.now() - (j * 1000)
+                });
+            }
+        }
+
+        const t: Omit<Task, 'id'> = {
             userId,
-            title: `[Seed] Tarea ${i} (Abril ${17 + offsetDays})`,
-            description: "Generada automáticamente desde el seed.",
+            title: taskTitles[i],
+            description: "Generada automáticamente por el seed respetando tus listas.",
             status: isCompleted ? "completed" : "todo",
-            priority: ["low", "medium", "high", "urgent"][Math.floor(Math.random() * 4)],
+            priority: ["low", "medium", "high", "urgent"][Math.floor(Math.random() * 4)] as any,
             dueDate,
-            createdAt: baseDate - (10 * dayMillis),
-            updatedAt: baseDate,
+            createdAt: Date.now() - (Math.random() * 5 * dayMillis),
+            updatedAt: Date.now(),
             listId: randomListId,
             isRecurring: false,
             order: i,
-            isImportant: i % 3 === 0,
-            source: 'manual'
-        } as any;
+            source: 'manual',
+            subtasks
+        };
 
-        if (isCompleted) t.completedAt = baseDate - dayMillis;
+        if (isCompleted) {
+            (t as any).completedAt = Date.now();
+            t.subtasks.forEach(s => s.completed = true);
+        }
 
         const tRef = doc(tasksRef);
         taskBatch.set(tRef, { ...t, id: tRef.id });
     }
     
-    // Tareas adicionales en General para validar fallback por defecto
-    for (let i = 16; i <= 18; i++) {
-        const t = {
-            userId,
-            title: `[Seed] Idea rápida ${i} en General`,
-            status: "todo",
-            priority: "low",
-            createdAt: baseDate,
-            updatedAt: baseDate,
-            listId: GENERAL_LIST_ID,
-            isRecurring: false,
-            order: i,
-            isImportant: false,
-            source: 'manual'
-        } as any;
-        const tRef = doc(tasksRef);
-        taskBatch.set(tRef, { ...t, id: tRef.id });
-    }
-
     await taskBatch.commit();
-    console.log("¡Seed de Listas y Tareas completado exitosamente!");
+    console.log("✓ Seed de tareas (en listas existentes) completado.");
 }

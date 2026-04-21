@@ -26,8 +26,7 @@ export default function SingleListView({ onSelectTask, listId }: Props) {
 
     const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
         if (e.key === 'Enter' && inputValue.trim() && userId) {
-            const newTask: Task = {
-                id: `t-${Date.now()}`,
+            const newTask: Omit<Task, 'id'> = {
                 userId,
                 title: inputValue.trim(),
                 status: 'todo',
@@ -36,9 +35,9 @@ export default function SingleListView({ onSelectTask, listId }: Props) {
                 updatedAt: Date.now(),
                 isRecurring: false,
                 order: 0,
-                isImportant: false,
                 listId: listId || GENERAL_LIST_ID,
                 source: 'manual',
+                subtasks: [],
             };
             addTask(newTask);
             setInputValue('');

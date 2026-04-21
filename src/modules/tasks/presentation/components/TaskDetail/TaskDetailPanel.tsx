@@ -5,6 +5,7 @@ import ContextSelector from '../../../../contexts/presentation/components/Contex
 import type { Task, TaskPriority, TaskStatus } from '../../../domain/models/Task';
 import { useTasksStore } from '../../../application/store/tasksStore';
 import { formatDateForInput, parseInputDateToTimestamp } from '../../../domain/utils/taskDate';
+import SubtaskList from '../Subtasks/SubtaskList';
 
 interface Props {
   task: Task | null;
@@ -26,7 +27,7 @@ const statuses: { value: TaskStatus, label: string, color: string, icon: string 
 
 export default function TaskDetailPanel({ task, onClose }: Props) {
     const { userId } = useAuthStore();
-    const { updateTask, moveTaskStatus } = useTasksStore();
+    const { updateTask, moveTaskStatus, addSubtask, toggleSubtask, editSubtask, deleteSubtask } = useTasksStore();
 
     const [isStatusOpen, setIsStatusOpen] = useState(false);
     const [isPriorityOpen, setIsPriorityOpen] = useState(false);
@@ -217,6 +218,17 @@ export default function TaskDetailPanel({ task, onClose }: Props) {
                             <ContextSelector 
                                 value={task.contextId || null} 
                                 onChange={(val) => handleChangeRecord({ contextId: val || undefined })} 
+                            />
+                        </div>
+
+                        {/* Subtareas */}
+                        <div className="flex flex-col gap-3 p-4 bg-gray-50 dark:bg-background/50 border border-gray-100 dark:border-white/5 rounded-2xl">
+                            <SubtaskList
+                                subtasks={task.subtasks ?? []}
+                                onToggle={(subtaskId) => userId && toggleSubtask(userId, task.id, subtaskId)}
+                                onEdit={(subtaskId, newTitle) => userId && editSubtask(userId, task.id, subtaskId, newTitle)}
+                                onDelete={(subtaskId) => userId && deleteSubtask(userId, task.id, subtaskId)}
+                                onAdd={(title) => userId && addSubtask(userId, task.id, title)}
                             />
                         </div>
 
