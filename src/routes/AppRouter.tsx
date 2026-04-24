@@ -14,12 +14,21 @@ import GoalsPage from '../modules/goals/presentation/pages/GoalsPage';
 import NotesPage from '../modules/notes/presentation/pages/NotesPage';
 import RoutinesPage from '../modules/routines/presentation/pages/RoutinesPage';
 import StatsPage from '../modules/stats/presentation/pages/StatsPage';
+import ProtectedRoute from '../modules/auth/presentation/components/ProtectedRoute';
+import AuthRequiredPage from '../modules/auth/presentation/pages/AuthRequiredPage';
 
 export default function AppRouter() {
     return (
         <BrowserRouter>
             <Routes>
-                <Route element={<MainLayout />}>
+                <Route path="/auth-required" element={<AuthRequiredPage />} />
+                <Route
+                    element={
+                        <ProtectedRoute>
+                            <MainLayout />
+                        </ProtectedRoute>
+                    }
+                >
                     <Route path="/" element={<Dashboard />} />
                     <Route path="/habits" element={<HabitsPage />} />
                     <Route path="/habits/:id" element={<HabitDetailsPage />} />

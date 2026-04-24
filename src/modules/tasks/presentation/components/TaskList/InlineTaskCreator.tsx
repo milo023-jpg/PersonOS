@@ -6,6 +6,7 @@ import { useContextsStore } from '../../../../contexts/application/store/context
 import { GENERAL_LIST_ID } from '../../../domain/constants/defaults';
 import type { Task, TaskPriority, TaskStatus } from '../../../domain/models/Task';
 import DatePickerPopover from './DatePickerPopover';
+import { logger } from '../../../../../shared/utils/logger';
 
 interface Props {
   onCancel: () => void;
@@ -140,7 +141,7 @@ export default function InlineTaskCreator({ onCancel, defaultContextId, defaultL
             // Cerrar el modal/formulario
             onCancel();
         } catch (error) {
-            console.error("Error saving task:", error);
+            logger.error('Error saving task.', error);
             setIsLoading(false);
         }
     };

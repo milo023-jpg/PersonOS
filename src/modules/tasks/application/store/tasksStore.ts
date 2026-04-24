@@ -2,6 +2,9 @@ import { create } from 'zustand';
 import type { Subtask, Task, TaskStatus } from '../../domain/models/Task';
 import { GENERAL_LIST_ID } from '../../domain/constants/defaults';
 import { taskRepository } from '../../infrastructure/repositories/taskRepository';
+import { dbService } from '../../../../services/dbService';
+import { normalizeTaskDocument, sanitizeSubtasks, type TaskDocument } from '../../../../scripts/normalizeTasks';
+import { logger } from '../../../../shared/utils/logger';
 
 function normalizeTask(task: Task): Task {
     return {
@@ -11,6 +14,58 @@ function normalizeTask(task: Task): Task {
         subtasks: task.subtasks ?? [],
         isImportant: task.isImportant ?? false,
     };
+}
+
+function buildTaskDebugSnapshot(task: Task | undefined) {
+    if (!task) return null;
+
+    return {
+        id: task.id,
+        title: task.title,
+        status: task.status,
+        listId: task.listId,
+        source: task.source,
+        updatedAt: task.updatedAt,
+        subtasksCount: Array.isArray(task.subtasks) ? task.subtasks.length : 'invalid',
+        documentIdMatchesFieldId: task.id === (task as TaskDocument).id,
+    };
+}
+
+function sanitizeSubtasksForPersistence(subtasks: unknown): Subtask[] {
+    return sanitizeSubtasks(subtasks, Date.now()).map((subtask) => ({
+        id: subtask.id,
+        title: subtask.title,
+        completed: subtask.completed,
+        createdAt: subtask.createdAt,
+    }));
+}
+
+function buildUserFacingError(action: 'update' | 'subtask', task: Task | undefined, error: unknown) {
+    const message = error instanceof Error ? error.message : String(error);
+    const taskLabel = task?.title ? `"${task.title}"` : 'la tarea';
+    const lower = message.toLowerCase();
+
+    if (lower.includes('permission') || lower.includes('missing or insufficient permissions')) {
+        return `No se pudo guardar el cambio en ${taskLabel} por permisos de Firestore. Revisa las reglas o el usuario actual.`;
+    }
+
+    if (action === 'subtask') {
+        return `No se pudo guardar la subtarea en ${taskLabel}. La app restauró el estado anterior para evitar datos inconsistentes.`;
+    }
+
+    return `No se pudo actualizar ${taskLabel}. Intenta de nuevo y revisa la consola para más detalle.`;
+}
+
+async function repairTaskDocument(userId: string, taskId: string) {
+    const collectionPath = `users/${userId}/tasks`;
+    const rawTask = await dbService.getDocument<TaskDocument>(collectionPath, taskId);
+    if (!rawTask) {
+        return null;
+    }
+
+    const normalizedTask = normalizeTaskDocument(rawTask, userId);
+    await dbService.createDocument(collectionPath, taskId, { id: taskId, ...normalizedTask });
+    return { id: taskId, ...normalizedTask } as Task;
 }
 
 interface TasksState {
@@ -24,6 +79,7 @@ interface TasksState {
     updateTask: (userId: string, taskId: string, partial: Partial<Task>) => Promise<void>;
     updateTasksBulk: (userId: string, updates: Array<{ taskId: string; partial: Partial<Task> }>) => Promise<void>;
     deleteTask: (userId: string, taskId: string) => Promise<void>;
+    clearError: () => void;
     
     // Acciones de conveniencia (usan updateTask internamente)
     moveTaskStatus: (userId: string, taskId: string, newStatus: TaskStatus) => Promise<void>;
@@ -39,6 +95,8 @@ export const useTasksStore = create<TasksState>((set, get) => ({
     tasks: [],
     isLoading: false,
     error: null,
+
+    clearError: () => set({ error: null }),
 
     fetchTasks: async (userId: string) => {
         set({ isLoading: true, error: null });
@@ -81,14 +139,63 @@ export const useTasksStore = create<TasksState>((set, get) => ({
     updateTask: async (userId, taskId, partial) => {
         // Optimistic update
         const previousTasks = get().tasks;
+        const currentTask = previousTasks.find((t) => t.id === taskId);
+        const sanitizedPartial: Partial<Task> = {
+            ...partial,
+            ...(Object.prototype.hasOwnProperty.call(partial, 'subtasks')
+                ? { subtasks: sanitizeSubtasksForPersistence(partial.subtasks) }
+                : {})
+        };
+        const timestamp = Date.now();
         set((state) => ({
-            tasks: state.tasks.map(t => t.id === taskId ? normalizeTask({ ...t, ...partial, updatedAt: Date.now() } as Task) : t)
+            tasks: state.tasks.map(t => t.id === taskId ? normalizeTask({ ...t, ...sanitizedPartial, updatedAt: timestamp } as Task) : t)
         }));
         
         try {
-            await taskRepository.updateTask(userId, taskId, { ...partial, updatedAt: Date.now() });
+            await taskRepository.updateTask(userId, taskId, { ...sanitizedPartial, updatedAt: timestamp });
         } catch (error: any) {
-            set({ tasks: previousTasks, error: error.message }); // Rollback
+            logger.error('Task update failed, attempting diagnosis.', error, {
+                taskId,
+                payload: sanitizedPartial,
+                previousTask: buildTaskDebugSnapshot(currentTask),
+            });
+
+            if (Object.prototype.hasOwnProperty.call(sanitizedPartial, 'subtasks')) {
+                try {
+                    const repairedTask = await repairTaskDocument(userId, taskId);
+                    const retriedPartial = { ...sanitizedPartial, updatedAt: Date.now() };
+
+                    await taskRepository.updateTask(userId, taskId, retriedPartial);
+                    set((state) => ({
+                        tasks: state.tasks.map((task) =>
+                            task.id === taskId
+                                ? normalizeTask({
+                                    ...(repairedTask ?? task),
+                                    ...retriedPartial,
+                                } as Task)
+                                : task
+                        ),
+                        error: null,
+                    }));
+                    return;
+                } catch (retryError: any) {
+                    logger.error('Task self-healing retry failed.', retryError, {
+                        taskId,
+                        payload: sanitizedPartial,
+                        previousTask: buildTaskDebugSnapshot(currentTask),
+                    });
+                    set({
+                        tasks: previousTasks,
+                        error: buildUserFacingError('subtask', currentTask, retryError),
+                    });
+                    return;
+                }
+            }
+
+            set({
+                tasks: previousTasks,
+                error: buildUserFacingError('update', currentTask, error),
+            }); // Rollback
         }
     },
 
@@ -150,7 +257,12 @@ export const useTasksStore = create<TasksState>((set, get) => ({
             createdAt: Date.now(),
         };
 
-        const updatedSubtasks = [...(task.subtasks ?? []), newSubtask];
+        const updatedSubtasks = sanitizeSubtasksForPersistence([...(task.subtasks ?? []), newSubtask]);
+        logger.info('Adding subtask to task.', {
+            taskId,
+            payload: updatedSubtasks,
+            previousTask: buildTaskDebugSnapshot(task),
+        });
         await get().updateTask(userId, taskId, { subtasks: updatedSubtasks });
     },
 

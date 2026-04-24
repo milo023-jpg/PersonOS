@@ -5,6 +5,7 @@ import { habitLogService } from '../../../../services/habitLog.service';
 import { dbService } from '../../../../services/dbService';
 import { getLocalISODate } from '../../../../utils/dateUtils';
 import { getYearWeek } from '../services/statsCalculator';
+import { logger } from '../../../../shared/utils/logger';
 
 interface HabitsState {
   habits: Habit[];
@@ -86,7 +87,7 @@ export const useHabitsStore = create<HabitsState>((set, get) => ({
       );
       set({ weeklyProgress: progressMap });
     } catch (err: any) {
-      console.error('Failed to fetch weekly progress', err);
+      logger.error('Failed to fetch weekly progress.', err);
     }
   },
 

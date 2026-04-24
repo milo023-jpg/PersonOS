@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { contextsService } from '../../infrastructure/services/contexts.service';
 import type { Context } from '../../domain/models/types';
+import { logger } from '../../../../shared/utils/logger';
 
 interface ContextsState {
     contexts: Context[];
@@ -19,7 +20,7 @@ export const useContextsStore = create<ContextsState>((set) => ({
             const contexts = await contextsService.getContexts(userId);
             set({ contexts, isLoading: false });
         } catch (error) {
-            console.error(error);
+            logger.error('Failed to fetch contexts.', error);
             set({ isLoading: false });
         }
     },
@@ -30,7 +31,7 @@ export const useContextsStore = create<ContextsState>((set) => ({
             const newContext: Context = { ...data, id, userId };
             set((state) => ({ contexts: [...state.contexts, newContext] }));
         } catch (error) {
-            console.error(error);
+            logger.error('Failed to create context.', error);
         }
     }
 }));
