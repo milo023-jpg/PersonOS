@@ -104,7 +104,7 @@ export default function TaskItem({ task, onSelect, bgClass }: Props) {
                 {/* Contenido principal */}
                 <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2">
-                        <h3 className={`text-[15px] font-bold truncate transition-colors ${isCompleted ? 'line-through text-text-secondary' : 'text-text-primary'}`}>
+                        <h3 className={`text-[15px] font-bold transition-all ${isExpanded ? 'whitespace-normal' : 'truncate'} ${isCompleted ? 'line-through text-text-secondary' : 'text-text-primary'}`}>
                             {task.title}
                         </h3>
                     </div>

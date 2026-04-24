@@ -82,9 +82,10 @@ export default function ListsView({ onSelectTask }: Props) {
     };
 
     const colors = [
-        'bg-red-500', 'bg-orange-500', 'bg-amber-500', 'bg-green-500', 
-        'bg-emerald-500', 'bg-teal-500', 'bg-cyan-500', 'bg-blue-500', 
-        'bg-indigo-500', 'bg-violet-500', 'bg-purple-500', 'bg-fuchsia-500', 'bg-rose-500'
+        'bg-red-500', 'bg-orange-500', 'bg-amber-500', 'bg-yellow-500', 'bg-lime-500', 'bg-green-500', 
+        'bg-emerald-500', 'bg-teal-500', 'bg-cyan-500', 'bg-sky-500', 'bg-blue-500', 
+        'bg-indigo-500', 'bg-violet-500', 'bg-purple-500', 'bg-fuchsia-500', 'bg-pink-500', 'bg-rose-500',
+        'bg-slate-500', 'bg-zinc-500', 'bg-stone-500'
     ];
 
     return (
@@ -122,13 +123,13 @@ export default function ListsView({ onSelectTask }: Props) {
                     <div className="flex items-center justify-between">
                         <div className="flex flex-col sm:flex-row gap-4 flex-1">
                             {/* Color Selector */}
-                            <div className="flex gap-2 items-center">
-                                {colors.slice(0, 6).map(c => (
+                            <div className="flex flex-wrap gap-2 items-center flex-1">
+                                {colors.map(c => (
                                     <button 
                                         key={c}
                                         type="button"
                                         onClick={() => setNewListColor(c)}
-                                        className={`w-6 h-6 rounded-full cursor-pointer transition-transform ${c} ${newListColor === c ? 'ring-2 ring-offset-2 ring-offset-surface ring-primary scale-110' : 'hover:scale-110'}`}
+                                        className={`w-6 h-6 rounded-full cursor-pointer transition-all ${c} ${newListColor === c ? 'ring-2 ring-offset-2 ring-offset-surface ring-primary scale-110' : 'hover:scale-110 opacity-80 hover:opacity-100'}`}
                                     />
                                 ))}
                             </div>
@@ -194,13 +195,13 @@ export default function ListsView({ onSelectTask }: Props) {
                                             placeholder="Nombre de la lista..."
                                         />
                                         <div className="flex flex-col sm:flex-row gap-3">
-                                            <div className="flex gap-2 items-center">
-                                                {colors.slice(0, 6).map(c => (
+                                            <div className="flex flex-wrap gap-2 items-center">
+                                                {colors.map(c => (
                                                     <button 
                                                         key={c}
                                                         type="button"
                                                         onClick={() => setEditListColor(c)}
-                                                        className={`w-5 h-5 rounded-full cursor-pointer transition-transform ${c} ${editListColor === c ? 'ring-2 ring-offset-1 ring-offset-surface ring-primary scale-110' : 'hover:scale-110'}`}
+                                                        className={`w-5 h-5 rounded-full cursor-pointer transition-all ${c} ${editListColor === c ? 'ring-2 ring-offset-1 ring-offset-surface ring-primary scale-110' : 'hover:scale-110 opacity-80 hover:opacity-100'}`}
                                                     />
                                                 ))}
                                             </div>
@@ -281,98 +282,106 @@ export default function ListsView({ onSelectTask }: Props) {
                             </div>
                             
                             <div className="flex flex-col gap-2">
-                                {listTasks.length === 0 ? (
-                                    <div className="py-6 flex flex-col items-center justify-center">
-                                        <p className="text-sm font-bold text-gray-400">Todo completo en esta lista. 🎉</p>
-                                    </div>
-                                ) : (
-                                    <AnimatePresence>
-                                        {/* 1. Lista de tareas (4 o todas según isExpanded) */}
-                                        {displayedTasks.map(task => (
-                                            <motion.div 
-                                                key={task.id}
-                                                initial={{ opacity: 0, y: 10 }}
-                                                animate={{ opacity: 1, y: 0 }}
-                                                exit={{ opacity: 0, y: -10 }}
-                                                className="w-full"
-                                            >
-                                                {task.id === editingTaskId ? (
-                                                    <InlineTaskCreator editTask={task} onCancel={() => setEditingTaskId(null)} />
-                                                ) : (
-                                                    <TaskItem
-                                                        task={task}
-                                                        onSelect={(selectedTask) => {
-                                                            setEditingTaskId(selectedTask.id);
-                                                            onSelectTask(selectedTask);
-                                                        }}
-                                                        bgClass="bg-gray-50 dark:bg-background"
-                                                    />
-                                                )}
-                                            </motion.div>
-                                        ))}
-
-                                        {/* 2. Control de Expansión (Solo si hay más de 4 tareas) */}
-                                        {!isExpanded && listTasks.length > 4 && (
-                                            <motion.div 
-                                                key={`expand-${list.id}`}
-                                                initial={{ opacity: 0 }}
-                                                animate={{ opacity: 1 }}
-                                                exit={{ opacity: 0 }}
-                                                className="w-full text-center mt-2"
-                                            >
-                                                <button 
-                                                    onClick={(e) => {
-                                                        e.stopPropagation();
-                                                        toggleExpansion(list.id);
-                                                    }}
-                                                    className="w-full py-2 bg-gray-50 dark:bg-white/5 rounded-xl text-xs font-bold text-text-secondary hover:text-primary hover:bg-gray-100 dark:hover:bg-white/10 transition-colors shadow-sm"
-                                                >
-                                                    + {listTasks.length - 4} tareas más
-                                                </button>
-                                            </motion.div>
-                                        )}
-
-                                        {isExpanded && listTasks.length > 4 && (
-                                            <motion.div 
-                                                key={`hide-${list.id}`}
-                                                initial={{ opacity: 0 }}
-                                                animate={{ opacity: 1 }}
-                                                exit={{ opacity: 0 }}
-                                                className="w-full text-center mt-2"
-                                            >
-                                                <button 
-                                                    onClick={(e) => {
-                                                        e.stopPropagation();
-                                                        toggleExpansion(list.id);
-                                                    }}
-                                                    className="w-full py-2 bg-gray-50 dark:bg-white/5 rounded-xl text-xs font-bold text-text-secondary hover:text-primary hover:bg-gray-100 dark:hover:bg-white/10 transition-colors shadow-sm"
-                                                >
-                                                    Ocultar tareas
-                                                </button>
-                                            </motion.div>
-                                        )}
-
-                                        {/* 3. Botón de Añadir Tarea (Siempre al final de todo el bloque) */}
-                                        <motion.div key={`add-btn-${list.id}`} layout className="w-full">
-                                            {activeCreatorListId === list.id ? (
-                                                <div className="mt-3">
-                                                    <InlineTaskCreator 
-                                                        defaultListId={list.id}
-                                                        onCancel={() => setActiveCreatorListId(null)}
-                                                    />
-                                                </div>
-                                            ) : (
-                                                <button 
-                                                    onClick={() => setActiveCreatorListId(list.id)}
-                                                    className="w-full text-left py-2.5 px-3 mt-2 rounded-xl text-text-secondary/60 hover:text-primary font-bold transition-all flex items-center gap-2 hover:bg-gray-50 dark:hover:bg-white/5 group border border-dashed border-transparent hover:border-primary/20"
-                                                >
-                                                    <svg className="w-5 h-5 text-primary opacity-50 group-hover:opacity-100 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path></svg>
-                                                    <span className="text-sm tracking-tight">Añadir tarea</span>
-                                                </button>
-                                            )}
+                                <AnimatePresence mode="popLayout">
+                                    {listTasks.length === 0 ? (
+                                        <motion.div 
+                                            key={`empty-${list.id}`}
+                                            initial={{ opacity: 0 }}
+                                            animate={{ opacity: 1 }}
+                                            exit={{ opacity: 0 }}
+                                            className="py-10 flex flex-col items-center justify-center"
+                                        >
+                                            <p className="text-sm font-bold text-gray-400/80">Todo completo en esta lista. 🎉</p>
                                         </motion.div>
-                                    </AnimatePresence>
-                                )}
+                                    ) : (
+                                        <>
+                                            {/* 1. Lista de tareas (4 o todas según isExpanded) */}
+                                            {displayedTasks.map(task => (
+                                                <motion.div 
+                                                    key={task.id}
+                                                    initial={{ opacity: 0, y: 10 }}
+                                                    animate={{ opacity: 1, y: 0 }}
+                                                    exit={{ opacity: 0, y: -10 }}
+                                                    className="w-full"
+                                                >
+                                                    {task.id === editingTaskId ? (
+                                                        <InlineTaskCreator editTask={task} onCancel={() => setEditingTaskId(null)} />
+                                                    ) : (
+                                                        <TaskItem
+                                                            task={task}
+                                                            onSelect={(selectedTask) => {
+                                                                setEditingTaskId(selectedTask.id);
+                                                                onSelectTask(selectedTask);
+                                                            }}
+                                                            bgClass="bg-gray-50 dark:bg-background"
+                                                        />
+                                                    )}
+                                                </motion.div>
+                                            ))}
+
+                                            {/* 2. Control de Expansión (Solo si hay más de 4 tareas) */}
+                                            {!isExpanded && listTasks.length > 4 && (
+                                                <motion.div 
+                                                    key={`expand-${list.id}`}
+                                                    initial={{ opacity: 0 }}
+                                                    animate={{ opacity: 1 }}
+                                                    exit={{ opacity: 0 }}
+                                                    className="w-full text-center mt-2"
+                                                >
+                                                    <button 
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            toggleExpansion(list.id);
+                                                        }}
+                                                        className="w-full py-2 bg-gray-50 dark:bg-white/5 rounded-xl text-xs font-bold text-text-secondary hover:text-primary hover:bg-gray-100 dark:hover:bg-white/10 transition-colors shadow-sm"
+                                                    >
+                                                        + {listTasks.length - 4} tareas más
+                                                    </button>
+                                                </motion.div>
+                                            )}
+
+                                            {isExpanded && listTasks.length > 4 && (
+                                                <motion.div 
+                                                    key={`hide-${list.id}`}
+                                                    initial={{ opacity: 0 }}
+                                                    animate={{ opacity: 1 }}
+                                                    exit={{ opacity: 0 }}
+                                                    className="w-full text-center mt-2"
+                                                >
+                                                    <button 
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            toggleExpansion(list.id);
+                                                        }}
+                                                        className="w-full py-2 bg-gray-50 dark:bg-white/5 rounded-xl text-xs font-bold text-text-secondary hover:text-primary hover:bg-gray-100 dark:hover:bg-white/10 transition-colors shadow-sm"
+                                                    >
+                                                        Ocultar tareas
+                                                    </button>
+                                                </motion.div>
+                                            )}
+                                        </>
+                                    )}
+
+                                    {/* 3. Botón de Añadir Tarea (Siempre al final de todo el bloque, sea lista vacía o llena) */}
+                                    <motion.div key={`add-btn-${list.id}`} layout className="w-full">
+                                        {activeCreatorListId === list.id ? (
+                                            <div className="mt-3">
+                                                <InlineTaskCreator 
+                                                    defaultListId={list.id}
+                                                    onCancel={() => setActiveCreatorListId(null)}
+                                                />
+                                            </div>
+                                        ) : (
+                                            <button 
+                                                onClick={() => setActiveCreatorListId(list.id)}
+                                                className="w-full text-left py-2.5 px-3 mt-2 rounded-xl text-text-secondary/60 hover:text-primary font-bold transition-all flex items-center gap-2 hover:bg-gray-50 dark:hover:bg-white/5 group border border-dashed border-transparent hover:border-primary/20"
+                                            >
+                                                <svg className="w-5 h-5 text-primary opacity-50 group-hover:opacity-100 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path></svg>
+                                                <span className="text-sm tracking-tight">Añadir tarea</span>
+                                            </button>
+                                        )}
+                                    </motion.div>
+                                </AnimatePresence>
                             </div>
                         </div>
                     );
