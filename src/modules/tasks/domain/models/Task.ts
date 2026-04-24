@@ -44,5 +44,5 @@ export interface Task {
   order: number; // para drag & drop
 
   parentTaskId?: string; // para subtareas entre documentos (futuro)
-  subtasks: Subtask[];   // subtareas embebidas (MVP)
+  subtasks?: Subtask[];   // subtareas embebidas (MVP)
 }
