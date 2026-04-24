@@ -40,6 +40,7 @@ export interface Task {
   estimatedTime?: number; // en minutos
   actualTime?: number;
 
+  isImportant?: boolean;
   order: number; // para drag & drop
 
   parentTaskId?: string; // para subtareas entre documentos (futuro)

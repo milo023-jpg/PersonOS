@@ -9,6 +9,7 @@ function normalizeTask(task: Task): Task {
         listId: task.listId || GENERAL_LIST_ID,
         source: task.source || 'manual',
         subtasks: task.subtasks ?? [],
+        isImportant: task.isImportant ?? false,
     };
 }
 
