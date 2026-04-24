@@ -98,7 +98,7 @@ export async function seedDBWithLists(userId: string) {
 
         if (isCompleted) {
             (t as any).completedAt = Date.now();
-            t.subtasks.forEach(s => s.completed = true);
+            t.subtasks?.forEach(s => s.completed = true);
         }
 
         const tRef = doc(tasksRef);
