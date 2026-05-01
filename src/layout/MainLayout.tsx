@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { Outlet, Link, useLocation } from "react-router-dom";
 import { SystemScrollArea } from "../shared/ui/SystemScrollArea";
+import { useAuthStore } from "../modules/auth/application/store/authStore";
 
 interface NavItem {
     to: string;
@@ -96,6 +97,7 @@ const PAGE_TITLES: Record<string, string> = {
 
 export default function MainLayout() {
     const location = useLocation();
+    const { displayName, email, photoURL, logout, isLoading } = useAuthStore();
 
     const [isDarkMode, setIsDarkMode] = useState(() => document.documentElement.classList.contains('dark'));
     
@@ -142,6 +144,8 @@ export default function MainLayout() {
 
     const isActive = (to: string) =>
         to === '/' ? location.pathname === '/' : location.pathname.startsWith(to);
+
+    const userName = displayName ?? (email ? email.split('@')[0] : 'Usuario');
 
     return (
         <div className="flex h-screen bg-background text-text-primary font-sans overflow-hidden">
@@ -272,13 +276,28 @@ export default function MainLayout() {
                             <input type="text" placeholder="Search here..." className="bg-gray-100/80 dark:bg-background text-sm rounded-full pl-10 pr-4 py-2.5 focus:outline-none focus:ring-2 ring-primary/20 w-48 lg:w-64 dark:text-text-primary placeholder:text-text-secondary" />
                         </div>
 
+                        <button
+                            type="button"
+                            onClick={() => {
+                                void logout();
+                            }}
+                            disabled={isLoading}
+                            className="rounded-xl border border-gray-200 px-3 py-2 text-xs font-semibold text-text-secondary transition hover:border-danger/40 hover:text-danger disabled:cursor-not-allowed disabled:opacity-60 dark:border-gray-700"
+                        >
+                            Cerrar sesion
+                        </button>
+
                         <div className="flex items-center gap-3 border-l pl-4 md:pl-6 border-gray-100 dark:border-gray-800">
                             <div className="w-8 h-8 md:w-10 md:h-10 rounded-full bg-primary/20 overflow-hidden shrink-0">
-                                <img src="https://api.dicebear.com/7.x/avataaars/svg?seed=Felix" alt="Avatar" className="w-full h-full object-cover" />
+                                <img
+                                    src={photoURL ?? "https://api.dicebear.com/7.x/avataaars/svg?seed=PersonOS"}
+                                    alt="Avatar"
+                                    className="w-full h-full object-cover"
+                                />
                             </div>
                             <div className="hidden sm:block">
-                                <p className="text-sm font-bold text-text-primary">Camilo</p>
-                                <p className="text-xs text-text-secondary">Admin</p>
+                                <p className="text-sm font-bold text-text-primary truncate max-w-[12rem]">{userName}</p>
+                                <p className="text-xs text-text-secondary truncate max-w-[12rem]">{email ?? 'Firebase Auth'}</p>
                             </div>
                         </div>
                     </div>

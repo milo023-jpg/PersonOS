@@ -15,13 +15,14 @@ import NotesPage from '../modules/notes/presentation/pages/NotesPage';
 import RoutinesPage from '../modules/routines/presentation/pages/RoutinesPage';
 import StatsPage from '../modules/stats/presentation/pages/StatsPage';
 import ProtectedRoute from '../modules/auth/presentation/components/ProtectedRoute';
-import AuthRequiredPage from '../modules/auth/presentation/pages/AuthRequiredPage';
+import LoginPage from '../modules/auth/presentation/pages/LoginPage';
 
 export default function AppRouter() {
     return (
         <BrowserRouter>
             <Routes>
-                <Route path="/auth-required" element={<AuthRequiredPage />} />
+                <Route path="/login" element={<LoginPage />} />
+                <Route path="/auth-required" element={<LoginPage />} />
                 <Route
                     element={
                         <ProtectedRoute>

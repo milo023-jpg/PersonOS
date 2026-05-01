@@ -24,21 +24,7 @@ export default function ProtectedRoute({ children }: Props) {
   }
 
   if (!userId) {
-    if (!import.meta.env.DEV) {
-      return <Navigate to="/auth-required" replace state={{ from: location }} />;
-    }
-
-    return (
-      <div className="flex min-h-screen items-center justify-center bg-background px-6">
-        <div className="w-full max-w-xl rounded-3xl border border-amber-200 bg-amber-50 p-8 shadow-sm dark:border-amber-500/20 dark:bg-amber-500/10">
-          <h1 className="text-2xl font-black text-amber-900 dark:text-amber-100">Autenticación requerida</h1>
-          <p className="mt-3 text-sm font-medium text-amber-800 dark:text-amber-200">
-            No hay una sesión activa. En desarrollo puedes definir `VITE_DEV_USER_ID` para abrir la app sin
-            exponer un usuario hardcodeado en producción.
-          </p>
-        </div>
-      </div>
-    );
+    return <Navigate to="/login" replace state={{ from: location }} />;
   }
 
   return <>{children}</>;

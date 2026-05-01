@@ -103,7 +103,7 @@ export default function HabitsPage() {
 
             {/* Empty State */}
             {!isLoading && habits.length === 0 && (
-                <div className="bg-white rounded-2xl p-10 text-center border border-dashed border-gray-300">
+                <div className="bg-surface rounded-2xl p-10 text-center border border-dashed border-gray-300 dark:border-white/15">
                     <span className="text-4xl">🌱</span>
                     <h3 className="text-lg font-bold text-text-primary mt-4">Aún no tienes hábitos</h3>
                     <p className="text-text-secondary mt-1 max-w-sm mx-auto">Comienza construyendo tu primera rutina haciendo clic en "Nuevo Hábito".</p>
