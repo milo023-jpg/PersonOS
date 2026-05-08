@@ -2,6 +2,7 @@ import {
   GoogleAuthProvider,
   createUserWithEmailAndPassword,
   onAuthStateChanged,
+  signInAnonymously,
   signInWithEmailAndPassword,
   signInWithPopup,
   signOut,
@@ -26,6 +27,10 @@ export function signInWithEmailPassword(email: string, password: string): Promis
 
 export function signUpWithEmailPassword(email: string, password: string): Promise<UserCredential> {
   return createUserWithEmailAndPassword(auth, email, password);
+}
+
+export function signInAnonymouslyDev(): Promise<UserCredential> {
+  return signInAnonymously(auth);
 }
 
 export function signOutUser(): Promise<void> {

@@ -1,5 +1,5 @@
 import { useTasksStore } from '../../../application/store/tasksStore';
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import TaskItem from './TaskItem';
 import InlineTaskCreator from './InlineTaskCreator';
 import { AnimatePresence } from 'framer-motion';
@@ -16,43 +16,56 @@ export default function TodayView({ onSelectTask }: Props) {
     const [isCreating, setIsCreating] = useState(false);
     const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
     const [isOverdueExpanded, setIsOverdueExpanded] = useState(true);
-    const { start: startOfToday, end: endOfToday } = getDayRange();
-
     const handleEditSelect = (task: Task) => {
         setEditingTaskId(task.id);
         onSelectTask(task);
     };
 
-    const todayTasks = tasks.filter(t => {
-        if (t.status === 'completed') return false;
+    const { overdueTasks, pendingTodayTasks, completedToday, todayTasks } = useMemo(() => {
+        const todayRange = getDayRange();
+        
+        // Filtrar tareas relevantes para hoy (no completadas o completadas hoy)
+        const relevantTasks = tasks.filter(t => {
+            if (t.status === 'completed') {
+                return t.completedAt ? (t.completedAt >= todayRange.start && t.completedAt <= todayRange.end) : false;
+            }
+            return isDueBeforeOrToday(t.dueDate) || 
+                   (toTaskDateTimestamp(t.dueDate) === undefined && (t.priority === 'high' || t.priority === 'urgent'));
+        });
 
-        const isUnscheduledHighPriority =
-            toTaskDateTimestamp(t.dueDate) === undefined && (t.priority === 'high' || t.priority === 'urgent');
+        const overdue: Task[] = [];
+        const pending: Task[] = [];
+        const completed: Task[] = [];
+        const today: Task[] = [];
 
-        return isDueBeforeOrToday(t.dueDate) || isUnscheduledHighPriority;
-    });
+        relevantTasks.forEach(t => {
+            if (t.status === 'completed') {
+                completed.push(t);
+            } else {
+                today.push(t);
+                const time = toTaskDateTimestamp(t.dueDate);
+                if (time !== undefined && time < todayRange.start) {
+                    overdue.push(t);
+                } else {
+                    pending.push(t);
+                }
+            }
+        });
 
-    // Ordenar de pasado a futuro
-    const sortedTasks = [...todayTasks].sort((a, b) => {
-        const timeA = toTaskDateTimestamp(a.dueDate) ?? Number.MAX_SAFE_INTEGER;
-        const timeB = toTaskDateTimestamp(b.dueDate) ?? Number.MAX_SAFE_INTEGER;
-        return timeA - timeB;
-    });
+        // Ordenar
+        const sortFn = (a: Task, b: Task) => {
+            const timeA = toTaskDateTimestamp(a.dueDate) ?? Number.MAX_SAFE_INTEGER;
+            const timeB = toTaskDateTimestamp(b.dueDate) ?? Number.MAX_SAFE_INTEGER;
+            return timeA - timeB;
+        };
 
-    const overdueTasks = sortedTasks.filter(t => {
-        const time = toTaskDateTimestamp(t.dueDate);
-        return time !== undefined && time < startOfToday;
-    });
-
-    const pendingTodayTasks = sortedTasks.filter(t => {
-        const time = toTaskDateTimestamp(t.dueDate);
-        return time === undefined || time >= startOfToday;
-    });
-
-    const completedToday = tasks.filter(t => {
-        if (t.status !== 'completed' || !t.completedAt) return false;
-        return t.completedAt >= startOfToday && t.completedAt <= endOfToday;
-    });
+        return {
+            overdueTasks: overdue.sort(sortFn),
+            pendingTodayTasks: pending.sort(sortFn),
+            completedToday: completed.sort((a, b) => (b.completedAt || 0) - (a.completedAt || 0)),
+            todayTasks: today
+        };
+    }, [tasks]);
 
     return (
         <div className="w-full h-full flex flex-col overflow-hidden">

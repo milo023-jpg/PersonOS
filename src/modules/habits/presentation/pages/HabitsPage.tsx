@@ -1,10 +1,11 @@
-import { useEffect, useState } from "react";
+import { lazy, Suspense, useEffect, useMemo, useState } from "react";
 import HabitCard from '../components/HabitCard';
-import CreateHabitModal from '../components/CreateHabitModal';
-import HabitsSummaryPanel from '../components/HabitsSummaryPanel';
 import { useHabitsStore } from '../../application/store/habitsStore';
 import { useAuthStore } from '../../../auth/application/store/authStore';
 import { getLocalISODate } from '../../../../utils/dateUtils';
+
+const CreateHabitModal = lazy(() => import('../components/CreateHabitModal'));
+const HabitsSummaryPanel = lazy(() => import('../components/HabitsSummaryPanel'));
 
 export default function HabitsPage() {
     const { userId } = useAuthStore();
@@ -41,10 +42,34 @@ export default function HabitsPage() {
         setSelectedDate(getLocalISODate(d), userId);
     };
 
-    // Formatear la fecha para mostrar ("Lunes, 12 de Abril")
-    const dateObj = new Date(selectedDate + "T12:00:00"); // Fix del TZ
-    const formattedDate = new Intl.DateTimeFormat('es-ES', { weekday: 'long', day: 'numeric', month: 'long' }).format(dateObj);
-    const isToday = selectedDate === getLocalISODate(new Date());
+    // Formatear la fecha memorizada
+    const { formattedDate, isToday } = useMemo(() => {
+        const dateObj = new Date(selectedDate + "T12:00:00");
+        return {
+            formattedDate: new Intl.DateTimeFormat('es-ES', { weekday: 'long', day: 'numeric', month: 'long' }).format(dateObj),
+            isToday: selectedDate === getLocalISODate(new Date())
+        };
+    }, [selectedDate]);
+
+    // Optimización O(1) para verificar completados
+    const completedHabitIds = useMemo(() => {
+        const completed = new Set<string>();
+        logs.forEach(l => {
+            if (l.date === selectedDate && l.completed) {
+                completed.add(l.habitId);
+            }
+        });
+        return completed;
+    }, [logs, selectedDate]);
+
+    const filteredHabits = useMemo(() => {
+        return habits.filter(habit => {
+            if (filter === 'all') return true;
+            if (filter === 'daily') return habit.type === 'daily';
+            if (filter === 'weekly') return habit.type === 'weekly';
+            return true;
+        });
+    }, [habits, filter]);
 
     return (
         <div className="flex flex-col xl:flex-row gap-8 max-w-[1600px] mx-auto relative">
@@ -112,38 +137,36 @@ export default function HabitsPage() {
 
             {/* Grilla de Tarjetas de Hábitos */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-                {habits.filter(habit => {
-                    if (filter === 'all') return true;
-                    if (filter === 'daily') return habit.type === 'daily';
-                    if (filter === 'weekly') return habit.type === 'weekly';
-                    return true;
-                }).map(habit => {
-                    const isCompleted = logs.some(l => l.habitId === habit.id && l.date === selectedDate && l.completed);
-                    return (
-                        <HabitCard 
-                            key={habit.id} 
-                            habit={habit} 
-                            isCompleted={isCompleted} 
-                            selectedDate={selectedDate}
-                            userId={userId!} 
-                        />
-                    );
-                })}
+                {filteredHabits.map(habit => (
+                    <HabitCard 
+                        key={habit.id} 
+                        habit={habit} 
+                        isCompleted={completedHabitIds.has(habit.id!)} 
+                        selectedDate={selectedDate}
+                        userId={userId!} 
+                    />
+                ))}
             </div>
 
             </div> {/* Fin de Left Main Content */}
 
             {/* Right Summary Panel */}
             <div className="w-full xl:w-[380px] flex-shrink-0">
-                <HabitsSummaryPanel />
+                <Suspense fallback={<div className="h-64 bg-surface animate-pulse rounded-2xl"></div>}>
+                    <HabitsSummaryPanel />
+                </Suspense>
             </div>
 
             {/* Modal de Creación */}
-            <CreateHabitModal 
-                isOpen={isCreateModalOpen} 
-                onClose={() => setIsCreateModalOpen(false)} 
-                userId={userId!} 
-            />
+            <Suspense fallback={null}>
+                {isCreateModalOpen ? (
+                    <CreateHabitModal 
+                        isOpen={isCreateModalOpen} 
+                        onClose={() => setIsCreateModalOpen(false)} 
+                        userId={userId!} 
+                    />
+                ) : null}
+            </Suspense>
         </div>
     );
 }

@@ -1,11 +1,12 @@
-import { useEffect, useState } from 'react';
+import { lazy, Suspense, useEffect, useMemo, useState } from 'react';
 import { useAuthStore } from '../../../auth/application/store/authStore';
 import { useTasksStore } from '../../application/store/tasksStore';
 import { useTaskListsStore } from '../../application/store/taskListsStore';
-import TodayView from '../components/TaskList/TodayView';
-import AllTasksView from '../components/TaskList/AllTasksView';
-import ListsView from '../components/TaskList/ListsView';
-import KanbanBoard from '../components/TaskBoard/KanbanBoard';
+
+const TodayView = lazy(() => import('../components/TaskList/TodayView'));
+const AllTasksView = lazy(() => import('../components/TaskList/AllTasksView'));
+const ListsView = lazy(() => import('../components/TaskList/ListsView'));
+const KanbanBoard = lazy(() => import('../components/TaskBoard/KanbanBoard'));
 
 import InlineTaskCreator from '../components/TaskList/InlineTaskCreator';
 import { GENERAL_LIST_ID } from '../../domain/constants/defaults';
@@ -32,7 +33,7 @@ export default function TasksPageDesktop() {
         }
     }, [userId, fetchTasks, fetchLists]);
 
-    const tabs = [
+    const tabs = useMemo(() => [
         {
             id: 'today',
             label: '⭐ Hoy',
@@ -45,7 +46,7 @@ export default function TasksPageDesktop() {
         { id: 'all', label: '📋 Todas', count: tasks.filter(t => t.status !== 'completed').length },
         { id: 'lists', label: '🗂️ Listas', count: tasks.filter(t => t.listId === GENERAL_LIST_ID && t.status !== 'completed').length },
         { id: 'board', label: '🛹 Tablero', count: null },
-    ] as const;
+    ] as const, [tasks]);
 
     return (
         <div className="h-full min-h-0 w-full flex flex-col pt-2 bg-background relative overflow-hidden">
@@ -121,10 +122,16 @@ export default function TasksPageDesktop() {
             {/* Contenedor de la Vista Activa */}
 
             <div className="flex-1 min-h-0 w-full relative">
-                {activeView === 'today' && <TodayView onSelectTask={(t) => setSelectedTaskId(t.id)} />}
-                {activeView === 'all' && <AllTasksView onSelectTask={(t) => setSelectedTaskId(t.id)} />}
-                {activeView === 'lists' && <ListsView onSelectTask={(t) => setSelectedTaskId(t.id)} />}
-                {activeView === 'board' && <KanbanBoard onSelectTask={(t) => setSelectedTaskId(t.id)} />}
+                <Suspense fallback={
+                    <div className="flex items-center justify-center h-full">
+                        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+                    </div>
+                }>
+                    {activeView === 'today' ? <TodayView onSelectTask={(t) => setSelectedTaskId(t.id)} /> : null}
+                    {activeView === 'all' ? <AllTasksView onSelectTask={(t) => setSelectedTaskId(t.id)} /> : null}
+                    {activeView === 'lists' ? <ListsView onSelectTask={(t) => setSelectedTaskId(t.id)} /> : null}
+                    {activeView === 'board' ? <KanbanBoard onSelectTask={(t) => setSelectedTaskId(t.id)} /> : null}
+                </Suspense>
             </div>
 
 

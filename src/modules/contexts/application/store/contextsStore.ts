@@ -7,7 +7,7 @@ interface ContextsState {
     contexts: Context[];
     isLoading: boolean;
     fetchContexts: (userId: string) => Promise<void>;
-    createContext: (userId: string, data: Omit<Context, 'id' | 'userId'>) => Promise<void>;
+    createContext: (userId: string, data: Omit<Context, 'id' | 'userId'>) => Promise<string | undefined>;
 }
 
 export const useContextsStore = create<ContextsState>((set) => ({
@@ -30,6 +30,7 @@ export const useContextsStore = create<ContextsState>((set) => ({
             const id = await contextsService.createContext(userId, data);
             const newContext: Context = { ...data, id, userId };
             set((state) => ({ contexts: [...state.contexts, newContext] }));
+            return id;
         } catch (error) {
             logger.error('Failed to create context.', error);
         }

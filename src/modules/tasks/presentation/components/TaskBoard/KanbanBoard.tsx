@@ -7,7 +7,7 @@ import { CSS } from '@dnd-kit/utilities';
 import type { Task, TaskStatus } from '../../../domain/models/Task';
 import { useAuthStore } from '../../../../auth/application/store/authStore';
 import InlineTaskCreator from '../TaskList/InlineTaskCreator';
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { SystemScrollArea } from '../../../../../shared/ui/SystemScrollArea';
 
@@ -252,19 +252,30 @@ export default function KanbanBoard({ onSelectTask }: Props) {
     const { tasks, updateTasksBulk } = useTasksStore();
     const [activeTask, setActiveTask] = useState<Task | null>(null);
 
-    // Sensores con restricciones para permitir interacción con botones internos
-    const sensors = useSensors(
-        useSensor(MouseSensor, {
-            activationConstraint: {
-                distance: 5,
-            },
-        }),
-        useSensor(TouchSensor, {
-            activationConstraint: {
-                delay: 250,
-                tolerance: 5,
-            },
-        })
+    // Sensores memorizados para evitar reinicialización
+    const sensors = useMemo(() => [
+        {
+            sensor: MouseSensor,
+            options: {
+                activationConstraint: {
+                    distance: 5,
+                },
+            }
+        },
+        {
+            sensor: TouchSensor,
+            options: {
+                activationConstraint: {
+                    delay: 250,
+                    tolerance: 5,
+                },
+            }
+        }
+    ].map(s => ({ sensor: s.sensor, options: s.options })), []);
+
+    const actualSensors = useSensors(
+        useSensor(sensors[0].sensor, sensors[0].options),
+        useSensor(sensors[1].sensor, sensors[1].options)
     );
 
     const [columnSorts, setColumnSorts] = useState<Record<TaskStatus, ColumnSort>>({
@@ -274,13 +285,36 @@ export default function KanbanBoard({ onSelectTask }: Props) {
         archived: 'manual',
     });
 
-    const columns: { id: TaskStatus, title: string, color: string }[] = [
+    const columns: { id: TaskStatus, title: string, color: string }[] = useMemo(() => [
         { id: 'todo', title: 'Pendientes', color: 'bg-gray-100 dark:bg-surface border-gray-200 dark:border-gray-800' },
         { id: 'in_progress', title: 'En Curso', color: 'bg-blue-50/50 dark:bg-blue-900/10 border-blue-100 dark:border-blue-900/30' },
         { id: 'completed', title: 'Completado', color: 'bg-green-50/50 dark:bg-green-900/10 border-green-100 dark:border-green-900/30' }
-    ];
+    ], []);
 
-    const getColumnTasks = (status: TaskStatus) => sortTasks(tasks.filter((task) => task.status === status), columnSorts[status]);
+    // Agrupar y ordenar tareas por estado en un solo paso
+    const tasksByStatus = useMemo(() => {
+        const groups: Record<TaskStatus, Task[]> = {
+            todo: [],
+            in_progress: [],
+            completed: [],
+            archived: [],
+        };
+        
+        tasks.forEach(task => {
+            if (groups[task.status]) {
+                groups[task.status].push(task);
+            }
+        });
+
+        // Ordenar cada grupo
+        Object.keys(groups).forEach(status => {
+            groups[status as TaskStatus] = sortTasks(groups[status as TaskStatus], columnSorts[status as TaskStatus]);
+        });
+
+        return groups;
+    }, [tasks, columnSorts]);
+
+    const getColumnTasks = (status: TaskStatus) => tasksByStatus[status];
 
     const setColumnSort = (status: TaskStatus, sort: ColumnSort) => {
         setColumnSorts((current) => ({ ...current, [status]: sort }));
@@ -367,7 +401,7 @@ export default function KanbanBoard({ onSelectTask }: Props) {
     return (
         <SystemScrollArea direction="x" className="absolute inset-0 p-6 flex justify-center gap-6 w-full h-full pb-6">
             <DndContext 
-                sensors={sensors}
+                sensors={actualSensors}
                 collisionDetection={closestCorners} 
                 onDragStart={handleDragStart} 
                 onDragEnd={handleDragEnd} 

@@ -13,7 +13,7 @@
     --surface: #ffffff;
     --text-primary: #111827;
     --text-secondary: #6b7280;
-    
+
     --pastel-red: #fee2e2;
     --pastel-orange: #ffedd5;
     --pastel-green: #dcfce7;
@@ -21,16 +21,16 @@
   }
 
   .dark {
-    --primary: #818cf8;       /* Vibrant violet blue */
-    --secondary: #64748b;     /* Muted gray for inactive icons */
-    --success: #4ade80;       
-    --warning: #fbbf24;       
-    --danger: #f87171;        
-    --background: #0b1120;    /* Dark deep blue from reference */
-    --surface: #1e293b;       /* Lighter tone for cards so they stand out */
+    --primary: #818cf8;
+    --secondary: #64748b;
+    --success: #4ade80;
+    --warning: #fbbf24;
+    --danger: #f87171;
+    --background: #0b1120;
+    --surface: #1e293b;
     --text-primary: #f8fafc;
     --text-secondary: #94a3b8;
-    
+
     --pastel-red: #3f1818;
     --pastel-orange: #3b200e;
     --pastel-green: #0f2e1b;
@@ -38,7 +38,6 @@
   }
 }
 
-/* Aplicar transparencia a los bordes grises de las cards en modo oscuro de forma global para mantener el diseño limpio */
 @layer components {
   .dark .border-gray-100,
   .dark .border-gray-200,
@@ -54,10 +53,12 @@
     width: 8px;
     height: 8px;
   }
+
   .system-scroll::-webkit-scrollbar-track,
   .custom-scrollbar::-webkit-scrollbar-track {
     background: transparent;
   }
+
   .system-scroll::-webkit-scrollbar-thumb,
   .custom-scrollbar::-webkit-scrollbar-thumb {
     background-color: rgba(156, 163, 175, 0.5);
@@ -65,21 +66,219 @@
     border: 2px solid transparent;
     background-clip: content-box;
   }
+
   .system-scroll::-webkit-scrollbar-thumb:hover,
   .custom-scrollbar::-webkit-scrollbar-thumb:hover {
     background-color: rgba(79, 70, 229, 0.7);
     background-clip: content-box;
   }
-  
-  /* Firefox */
+
   .system-scroll,
   .custom-scrollbar {
     scrollbar-width: thin;
     scrollbar-color: rgba(79, 70, 229, 0.6) transparent;
   }
-  
+
   .system-scroll:hover,
   .custom-scrollbar:hover {
     scrollbar-color: rgba(79, 70, 229, 0.8) transparent;
   }
+
+  [contenteditable][data-placeholder]:empty::before {
+    content: attr(data-placeholder);
+    color: var(--text-secondary);
+    opacity: 0.5;
+    pointer-events: none;
+    user-select: none;
+  }
+}
+
+/* ============================================================================
+   BlockNote Document-First Editor Styles
+   ============================================================================ */
+
+/* Remove the dark box effect - make editor transparent */
+.bn-mantine,
+.bn-editor {
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+}
+
+/* The main editable surface must feel like a document */
+.bn-editor {
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  font-size: 17px;
+  line-height: 1.7;
+  color: var(--text-primary);
+}
+
+/* Make the editor content area extend naturally - full surface */
+.bn-editor [contenteditable] {
+  min-height: 50vh;
+  padding-bottom: 20vh;
+  outline: none !important;
+  cursor: text;
+  background: transparent !important;
+}
+
+/* Remove any background from the editor container */
+.bn-editor > div:first-child {
+  background: transparent !important;
+}
+
+/* Remove focus rings */
+.bn-editor:focus-visible,
+.bn-editor [contenteditable]:focus-visible,
+.bn-editor *:focus-visible {
+  outline: none !important;
+  box-shadow: none !important;
+}
+
+/* Headings - document typography */
+.bn-editor [data-content-type="heading"] {
+  font-weight: 700;
+  letter-spacing: -0.025em;
+  margin-top: 1.75em;
+  margin-bottom: 0.4em;
+  line-height: 1.15;
+}
+
+.bn-editor [data-content-type="heading"][data-level="1"] {
+  font-size: 2rem;
+  font-weight: 800;
+}
+
+.bn-editor [data-content-type="heading"][data-level="2"] {
+  font-size: 1.5rem;
+  font-weight: 700;
+}
+
+.bn-editor [data-content-type="heading"][data-level="3"] {
+  font-size: 1.25rem;
+  font-weight: 600;
+}
+
+/* Paragraphs - comfortable reading */
+.bn-editor p {
+  margin-bottom: 0.8em;
+}
+
+/* Lists */
+.bn-editor ul,
+.bn-editor ol {
+  margin-left: 1.25em;
+  margin-bottom: 0.8em;
+}
+
+.bn-editor li {
+  margin-bottom: 0.3em;
+  padding-left: 0.3em;
+}
+
+/* Blockquotes */
+.bn-editor blockquote {
+  border-left: 3px solid var(--primary);
+  padding-left: 1em;
+  margin-left: 0;
+  margin-bottom: 0.8em;
+  color: var(--text-secondary);
+  font-style: italic;
+}
+
+/* Code blocks - subtle */
+.bn-editor pre {
+  background: rgba(0, 0, 0, 0.03);
+  border-radius: 8px;
+  padding: 1em;
+  margin-bottom: 0.8em;
+  font-family: 'SF Mono', Monaco, 'Cascadia Code', monospace;
+  font-size: 0.85em;
+  overflow-x: auto;
+}
+
+.dark .bn-editor pre {
+  background: rgba(255, 255, 255, 0.04);
+}
+
+/* Inline code */
+.bn-editor code {
+  background: rgba(0, 0, 0, 0.05);
+  padding: 0.15em 0.35em;
+  border-radius: 4px;
+  font-family: 'SF Mono', Monaco, 'Cascadia Code', monospace;
+  font-size: 0.85em;
+}
+
+.dark .bn-editor code {
+  background: rgba(255, 255, 255, 0.06);
+}
+
+/* Divider */
+.bn-editor hr {
+  border: none;
+  border-top: 1px solid var(--secondary);
+  opacity: 0.2;
+  margin: 2.5em 0;
+}
+
+/* Placeholder - integrated with document */
+.bn-editor [contenteditable][data-placeholder]:empty::before {
+  content: attr(data-placeholder);
+  color: var(--text-secondary);
+  opacity: 0.3;
+  font-style: normal;
+  pointer-events: none;
+}
+
+/* Slash menu - floating but elegant */
+[role="listbox"] {
+  border-radius: 12px !important;
+  box-shadow: 0 20px 40px -12px rgba(0, 0, 0, 0.25) !important;
+}
+
+/* Toolbar - floating premium */
+.mantine-Flex-root[role="toolbar"] {
+  border-radius: 10px !important;
+  box-shadow: 0 8px 24px -8px rgba(0, 0, 0, 0.2) !important;
+  padding: 4px !important;
+}
+
+/* ============================================================================
+   BlockNote Native Controls - Let BlockNote handle its own controls
+   ============================================================================ */
+
+/* Only ensure the editor container allows controls to be visible */
+.bn-editor {
+  overflow: visible;
+}
+
+/* Ensure all SVG icons in the editor are visible on dark backgrounds */
+.dark .bn-editor svg {
+  color: inherit;
+}
+
+/* Side menu controls - BlockNote native hover behavior */
+.bn-editor [data-test="dragHandle"],
+.bn-editor [data-test="addBlockButton"] {
+  opacity: 0.4;
+  transition: opacity 0.15s ease;
+}
+
+.bn-editor:hover [data-test="dragHandle"],
+.bn-editor:hover [data-test="addBlockButton"],
+.bn-editor [data-test="dragHandle"]:hover,
+.bn-editor [data-test="addBlockButton"]:hover {
+  opacity: 1;
+}
+
+/* Ensure control buttons have visible icons */
+.dark .bn-editor button svg,
+.dark .bn-editor [role="button"] svg {
+  color: #94a3b8;
+}
+
+.dark .bn-editor button:hover svg,
+.dark .bn-editor [role="button"]:hover svg {
+  color: #e2e8f0;
 }

@@ -1,3 +1,4 @@
+import { memo } from 'react';
 import { Link } from 'react-router-dom';
 import type { Habit } from '../../domain/models/types';
 import { useHabitsStore } from '../../application/store/habitsStore';
@@ -9,7 +10,7 @@ interface HabitCardProps {
     userId: string;
 }
 
-export default function HabitCard({ habit, isCompleted, selectedDate, userId }: HabitCardProps) {
+const HabitCard = memo(({ habit, isCompleted, selectedDate, userId }: HabitCardProps) => {
     const { toggleHabit, weeklyProgress } = useHabitsStore();
 
     const handleCheck = (e: React.MouseEvent) => {
@@ -93,4 +94,6 @@ export default function HabitCard({ habit, isCompleted, selectedDate, userId }: 
             </div>
         </Link>
     );
-}
+});
+
+export default HabitCard;
