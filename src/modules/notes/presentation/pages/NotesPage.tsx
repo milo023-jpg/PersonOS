@@ -154,14 +154,14 @@ function getInheritedContexts(noteListId: string | undefined, noteLists: NoteLis
 /** Determina si una nota está completamente vacía (sin título, contenido, contexto ni lista) */
 function isNoteEmpty(note: Note): boolean {
   const hasTitle = note.title.trim().length > 0;
-  const hasContent = note.plainText?.trim().length > 0;
+  const hasContent = (note.plainText?.trim().length ?? 0) > 0;
   const hasContext = note.contextIds.length > 0;
   const hasList = !!note.noteListId;
   return !hasTitle && !hasContent && !hasContext && !hasList;
 }
 
 /** Elimina una nota vacía silenciosamente (sin confirmación) */
-async function deleteIfEmpty(userId: string, noteId: string | null, deleteFn: (userId: string, noteId: string) => Promise<void>) {
+async function deleteIfEmpty(userId: string | null, noteId: string | null, deleteFn: (userId: string, noteId: string) => Promise<void>) {
   if (!noteId || !userId) return;
   const note = useNotesStore.getState().notes.find(n => n.id === noteId);
   if (note && isNoteEmpty(note)) {

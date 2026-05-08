@@ -90,11 +90,11 @@ function sanitizeBlock(block: Record<string, unknown>): PartialBlock | null {
   // Merge extracted props (e.g. heading level)
   Object.assign(props, extraProps);
 
-  const sanitized: PartialBlock = {
+  const sanitized = {
     type,
     content: content as PartialBlock['content'],
     props,
-  };
+  } as PartialBlock;
 
   // Sanitize children recursively
   if (Array.isArray(block.children)) {

@@ -177,8 +177,8 @@ export const useNotesStore = create<NotesStore>((set, get) => ({
       ),
     }));
 
+    const repo = getNotesRepository(userId);
     try {
-      const repo = getNotesRepository(userId);
       await repo.update(noteId, updatedPartial);
     } catch (err) {
       logger.error('Failed to update note', err);
