@@ -26,7 +26,49 @@ export const useNoteListsStore = create<NoteListsState>((set, get) => ({
     set({ isLoading: true, error: null });
     try {
       const lists = await dbService.getCollectionDocuments<NoteList>(COLLECTION_PATH(userId));
-      set({ lists: lists.sort((a, b) => a.order - b.order), isLoading: false });
+      let sortedLists = lists.sort((a, b) => a.order - b.order);
+
+      // Si no hay listas, crear las listas por defecto: General y Eliminadas
+      if (sortedLists.length === 0) {
+        const defaultList: Omit<NoteList, 'id'> = {
+          userId,
+          name: 'General',
+          color: '#6b7280',
+          order: 1,
+          createdAt: Date.now(),
+          isDefault: true,
+        };
+        const defaultId = await dbService.addDocument(COLLECTION_PATH(userId), defaultList);
+        
+        const trashList: Omit<NoteList, 'id'> = {
+          userId,
+          name: 'Eliminadas recientemente',
+          color: '#ef4444',
+          order: 2,
+          createdAt: Date.now(),
+          isTrash: true,
+        };
+        const trashId = await dbService.addDocument(COLLECTION_PATH(userId), trashList);
+        
+        sortedLists = [
+          { ...defaultList, id: defaultId },
+          { ...trashList, id: trashId },
+        ];
+      } else if (!sortedLists.some(l => l.isTrash)) {
+        // Si ya hay listas pero falta la papelera, crearla al final
+        const trashList: Omit<NoteList, 'id'> = {
+          userId,
+          name: 'Eliminadas recientemente',
+          color: '#ef4444',
+          order: sortedLists.length + 1,
+          createdAt: Date.now(),
+          isTrash: true,
+        };
+        const trashId = await dbService.addDocument(COLLECTION_PATH(userId), trashList);
+        sortedLists.push({ ...trashList, id: trashId });
+      }
+
+      set({ lists: sortedLists, isLoading: false });
     } catch (error: any) {
       logger.error('Failed to fetch note lists.', error);
       set({ error: error.message, isLoading: false });

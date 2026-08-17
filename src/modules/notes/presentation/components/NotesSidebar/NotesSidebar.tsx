@@ -4,6 +4,7 @@ import { useAuthStore } from '../../../../auth/application/store/authStore';
 import { useContextsStore } from '../../../../contexts/application/store/contextsStore';
 import { useNoteListsStore } from '../../../application/store/noteListsStore';
 import type { NotesActiveFilter } from '../../../application/store/notesStore';
+import { Tooltip } from '../Tooltip/Tooltip';
 
 
 interface NotesSidebarProps {
@@ -13,6 +14,8 @@ interface NotesSidebarProps {
   selectedListId: string | null;
   isCollapsed: boolean;
   onToggleCollapse: () => void;
+  isMobileOpen: boolean;
+  onMobileClose: () => void;
 }
 
 const Icons = {
@@ -181,6 +184,8 @@ export function NotesSidebar({
   selectedListId,
   isCollapsed,
   onToggleCollapse,
+  isMobileOpen,
+  onMobileClose,
 }: NotesSidebarProps) {
   const { userId } = useAuthStore();
   const { notes } = useNotesStore();
@@ -223,10 +228,13 @@ export function NotesSidebar({
       }
     }
 
+    const deletedNotes = notes.filter(n => n.isDeleted);
+
     return {
       all: activeNotes.length,
       favorites: activeNotes.filter(n => n.isFavorite).length,
       recent: activeNotes.length,
+      deleted: deletedNotes.length,
       byContext: (ctxId: string) => contextCounts.get(ctxId) || 0,
       byList: (listId: string) => listCounts.get(listId) || 0,
     };
@@ -253,27 +261,61 @@ export function NotesSidebar({
     setIsCreatingList(false);
   };
 
+  const handleFilterClick = (filter: NotesActiveFilter, contextId?: string | null, listId?: string | null) => {
+    onFilterChange(filter, contextId, listId);
+    onMobileClose();
+  };
+
   return (
-    <aside
-      className={`h-full flex flex-col bg-surface/40 border-r border-gray-100 dark:border-gray-800/60 transition-all duration-300 ${
-        isCollapsed ? 'w-14' : 'w-64'
-      }`}
-    >
-      {/* Header */}
-      <div className="flex items-center justify-between px-3 py-3 border-b border-gray-100 dark:border-gray-800/60">
-        {!isCollapsed && (
-          <span className="text-xs font-bold text-text-secondary uppercase tracking-wider px-1">
-            Workspace
-          </span>
-        )}
-        <button
-          onClick={onToggleCollapse}
-          className="p-1.5 rounded-lg text-text-secondary hover:text-text-primary hover:bg-surface transition-colors"
-          title={isCollapsed ? 'Expandir sidebar' : 'Colapsar sidebar'}
-        >
-          {isCollapsed ? <Icons.ChevronRight /> : <Icons.ChevronLeft />}
-        </button>
-      </div>
+    <>
+      {/* Mobile backdrop */}
+      <div
+        className={`md:hidden fixed inset-0 z-40 bg-black/60 transition-opacity duration-300 ${
+          isMobileOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'
+        }`}
+        onClick={onMobileClose}
+      />
+
+      {/* Sidebar */}
+      <aside
+        className={`flex flex-col border-r border-gray-100 dark:border-gray-800/60
+          transition-all duration-300
+          bg-surface dark:bg-[#0f1117] md:bg-surface/40 md:dark:bg-surface/40 md:h-full
+          ${isMobileOpen ? 'translate-x-0' : '-translate-x-full'}
+          fixed md:relative top-16 md:top-0 bottom-0 left-0 z-50 md:z-auto
+          md:translate-x-0 w-72 max-w-[85vw] md:w-auto md:max-w-none
+          ${isCollapsed ? 'md:w-14' : 'md:w-64'}
+        `}
+      >
+        {/* Header */}
+        <div className="flex items-center justify-between px-3 py-3 border-b border-gray-100 dark:border-gray-800/60 shrink-0">
+          {!isCollapsed && (
+            <span className="text-xs font-bold text-text-secondary uppercase tracking-wider px-1">
+              Workspace
+            </span>
+          )}
+          <div className="flex items-center gap-1">
+            {/* Mobile close button */}
+            <button
+              onClick={onMobileClose}
+              className="md:hidden p-1.5 rounded-lg text-text-secondary hover:text-text-primary hover:bg-surface transition-colors"
+              aria-label="Cerrar filtros"
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+            {/* Collapse toggle (desktop) */}
+            <Tooltip label={isCollapsed ? 'Expandir filtros' : 'Colapsar filtros'} placement="right">
+              <button
+                onClick={onToggleCollapse}
+                className="hidden md:block p-1.5 rounded-lg text-text-secondary hover:text-text-primary hover:bg-surface transition-colors"
+              >
+                {isCollapsed ? <Icons.ChevronRight /> : <Icons.ChevronLeft />}
+              </button>
+            </Tooltip>
+          </div>
+        </div>
 
       {/* Scrollable content */}
       <div className="flex-1 overflow-y-auto py-2 space-y-1 px-2">
@@ -282,7 +324,7 @@ export function NotesSidebar({
           label="Todas las notas"
           count={counts.all}
           isActive={activeFilter === 'all'}
-          onClick={() => onFilterChange('all', null, null)}
+          onClick={() => handleFilterClick('all', null, null)}
           isCollapsed={isCollapsed}
         />
         <NavItem
@@ -290,14 +332,26 @@ export function NotesSidebar({
           label="Favoritas"
           count={counts.favorites}
           isActive={activeFilter === 'favorites'}
-          onClick={() => onFilterChange('favorites', null, null)}
+          onClick={() => handleFilterClick('favorites', null, null)}
           isCollapsed={isCollapsed}
         />
         <NavItem
           icon={<Icons.Clock />}
           label="Recientes"
           isActive={activeFilter === 'recent'}
-          onClick={() => onFilterChange('recent', null, null)}
+          onClick={() => handleFilterClick('recent', null, null)}
+          isCollapsed={isCollapsed}
+        />
+        <NavItem
+          icon={
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0" />
+            </svg>
+          }
+          label="Eliminadas"
+          count={counts.deleted}
+          isActive={activeFilter === 'deleted'}
+          onClick={() => handleFilterClick('deleted', null, null)}
           isCollapsed={isCollapsed}
         />
 
@@ -341,7 +395,7 @@ export function NotesSidebar({
                     label={context.name}
                     count={counts.byContext(context.id || '')}
                     isActive={activeFilter === 'context' && selectedContextId === context.id}
-                    onClick={() => onFilterChange('context', context.id || null, null)}
+                    onClick={() => handleFilterClick('context', context.id || null, null)}
                     isCollapsed={isCollapsed}
                   />
                 ))}
@@ -359,7 +413,7 @@ export function NotesSidebar({
             icon={<span style={{ color: context.color }}>{context.icon}</span>}
             label={context.name}
             isActive={activeFilter === 'context' && selectedContextId === context.id}
-            onClick={() => onFilterChange('context', context.id || null, null)}
+            onClick={() => handleFilterClick('context', context.id || null, null)}
             isCollapsed={isCollapsed}
           />
         ))}
@@ -397,18 +451,18 @@ export function NotesSidebar({
                     showColorPicker
                   />
                 )}
-                {noteLists.map(list => (
+                {noteLists.filter(l => !l.isTrash).map(list => (
                   <NavItem
                     key={list.id}
                     icon={<span style={{ color: list.color }}><Icons.Folder /></span>}
                     label={list.name}
                     count={counts.byList(list.id)}
                     isActive={activeFilter === 'list' && selectedListId === list.id}
-                    onClick={() => onFilterChange('list', null, list.id)}
+                    onClick={() => handleFilterClick('list', null, list.id)}
                     isCollapsed={isCollapsed}
                   />
                 ))}
-                {noteLists.length === 0 && !isCreatingList && (
+                {noteLists.filter(l => !l.isTrash).length === 0 && !isCreatingList && (
                   <p className="px-2.5 py-1 text-xs text-text-secondary/60">Sin listas</p>
                 )}
               </div>
@@ -416,17 +470,18 @@ export function NotesSidebar({
           </div>
         )}
 
-        {isCollapsed && noteLists.map(list => (
+        {isCollapsed && noteLists.filter(l => !l.isTrash).map(list => (
           <NavItem
             key={list.id}
             icon={<span style={{ color: list.color }}><Icons.Folder /></span>}
             label={list.name}
             isActive={activeFilter === 'list' && selectedListId === list.id}
-            onClick={() => onFilterChange('list', null, list.id)}
+            onClick={() => handleFilterClick('list', null, list.id)}
             isCollapsed={isCollapsed}
           />
         ))}
       </div>
     </aside>
+    </>
   );
 }

@@ -9,6 +9,7 @@ import { ContextSelectorChips } from '../components/ContextSelector/ContextSelec
 import { ListSelector } from '../components/ListSelector/ListSelector';
 import { BlockNoteEditor, toPartialBlocks, fromPartialBlocks } from '../components/BlockNoteEditor';
 import { QuickCaptureModal } from '../components/QuickCapture/QuickCaptureModal';
+import { Tooltip } from '../components/Tooltip/Tooltip';
 import type { Note } from '../../domain/models/Note';
 import type { NoteList } from '../../domain/models/NoteList';
 import type { Context } from '../../../contexts/domain/models/types';
@@ -101,12 +102,6 @@ function OptionsMenu({
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [open]);
 
-  const items = [
-    { label: 'Duplicar nota', icon: <IconDuplicate />, action: onDuplicate },
-    { label: 'Copiar enlace', icon: <IconLink />, action: onCopyLink },
-    { label: 'Eliminar', icon: <IconTrash />, action: onDelete, danger: true },
-  ];
-
   return (
     <div className="relative" ref={menuRef}>
       <button
@@ -119,23 +114,36 @@ function OptionsMenu({
 
       {open && (
         <div className="absolute right-0 mt-2 w-56 bg-surface border border-gray-200/10 dark:border-gray-700/50 rounded-xl shadow-xl shadow-black/20 py-1 z-50 animate-in fade-in-0 zoom-in-95 duration-150">
-          {items.map((item, i) => (
-            <button
-              key={i}
-              onClick={() => {
-                item.action();
-                setOpen(false);
-              }}
-              className={`w-full flex items-center gap-3 px-4 py-2.5 text-sm transition-colors ${
-                item.danger
-                  ? 'text-red-400 hover:bg-red-500/10 hover:text-red-300'
-                  : 'text-text-secondary hover:bg-surface hover:text-text-primary'
-              }`}
-            >
-              {item.icon}
-              {item.label}
-            </button>
-          ))}
+          <button
+            onClick={() => {
+              onDuplicate();
+              setOpen(false);
+            }}
+            className="w-full flex items-center gap-3 px-4 py-2.5 text-sm transition-colors text-text-secondary hover:bg-surface hover:text-text-primary"
+          >
+            <IconDuplicate />
+            Duplicar nota
+          </button>
+          <button
+            onClick={() => {
+              onCopyLink();
+              setOpen(false);
+            }}
+            className="w-full flex items-center gap-3 px-4 py-2.5 text-sm transition-colors text-text-secondary hover:bg-surface hover:text-text-primary"
+          >
+            <IconLink />
+            Copiar enlace
+          </button>
+          <button
+            onClick={() => {
+              onDelete();
+              setOpen(false);
+            }}
+            className="w-full flex items-center gap-3 px-4 py-2.5 text-sm transition-colors text-red-400 hover:bg-red-500/10 hover:text-red-300"
+          >
+            <IconTrash />
+            Eliminar
+          </button>
         </div>
       )}
     </div>
@@ -151,13 +159,11 @@ function getInheritedContexts(noteListId: string | undefined, noteLists: NoteLis
   return list?.defaultContextId ? [list.defaultContextId] : [];
 }
 
-/** Determina si una nota está completamente vacía (sin título, contenido, contexto ni lista) */
+/** Determina si una nota está completamente vacía (sin título ni contenido) */
 function isNoteEmpty(note: Note): boolean {
   const hasTitle = note.title.trim().length > 0;
   const hasContent = (note.plainText?.trim().length ?? 0) > 0;
-  const hasContext = note.contextIds.length > 0;
-  const hasList = !!note.noteListId;
-  return !hasTitle && !hasContent && !hasContext && !hasList;
+  return !hasTitle && !hasContent;
 }
 
 /** Elimina una nota vacía silenciosamente (sin confirmación) */
@@ -187,6 +193,8 @@ export default function NotesPage() {
     updateNote,
     deleteNote,
     toggleFavorite,
+    restoreDeletedNote,
+    permanentlyDeleteNote,
     setCurrentNote,
     setSelectedContext,
     setSelectedListId,
@@ -203,6 +211,8 @@ export default function NotesPage() {
   const [isEditing, setIsEditing] = useState(false);
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved'>('idle');
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [isNoteListCollapsed, setIsNoteListCollapsed] = useState(false);
+  const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
   const [showMobileList, setShowMobileList] = useState(true);
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const currentNoteIdRef = useRef<string | null>(null);
@@ -257,7 +267,12 @@ export default function NotesPage() {
     const lower = searchQuery.toLowerCase();
     const hasSearch = searchQuery.trim().length > 0;
 
+    // Filtrar según el filtro activo
     const result = notes.filter(n => {
+      if (activeFilter === 'deleted') {
+        return n.isDeleted;
+      }
+      // Para todos los demás filtros, excluir eliminadas
       if (n.isDeleted) return false;
       switch (activeFilter) {
         case 'favorites':
@@ -279,6 +294,9 @@ export default function NotesPage() {
     if (activeFilter === 'recent') {
       result.sort((a, b) => b.updatedAt - a.updatedAt);
     }
+    if (activeFilter === 'deleted') {
+      result.sort((a, b) => (b.deletedAt ?? 0) - (a.deletedAt ?? 0));
+    }
 
     return result;
   }, [notes, activeFilter, selectedContextId, selectedListId, searchQuery]);
@@ -290,8 +308,20 @@ export default function NotesPage() {
 
   const handleFilterChange = useCallback((filter: NotesActiveFilter, contextId?: string | null, listId?: string | null) => {
     setActiveFilter(filter);
-    if (contextId !== undefined) setSelectedContext(contextId);
-    if (listId !== undefined) setSelectedListId(listId);
+
+    // Limpiar o establecer selectedContextId según el filtro
+    if (filter === 'context' && contextId !== undefined) {
+      setSelectedContext(contextId);
+    } else if (filter !== 'context') {
+      setSelectedContext(null);
+    }
+
+    // Limpiar o establecer selectedListId según el filtro
+    if (filter === 'list' && listId !== undefined) {
+      setSelectedListId(listId);
+    } else if (filter !== 'list') {
+      setSelectedListId(null);
+    }
   }, [setActiveFilter, setSelectedContext, setSelectedListId]);
 
   const handleNoteClick = useCallback(async (note: Note) => {
@@ -309,24 +339,42 @@ export default function NotesPage() {
     await toggleFavorite(userId, noteId);
   }, [userId, toggleFavorite]);
 
+  const trashList = useMemo(() => noteLists.find(l => l.isTrash), [noteLists]);
+
   const handleDelete = useCallback(async (noteId: string) => {
     if (!userId) return;
-    if (confirm('¿Eliminar esta nota?')) {
-      await deleteNote(userId, noteId);
-      if (currentNoteIdRef.current === noteId) {
-        setCurrentNote(null);
-        currentNoteIdRef.current = null;
-        setIsEditing(false);
-        setShowMobileList(true);
-      }
+    await deleteNote(userId, noteId, trashList?.id);
+    if (currentNoteIdRef.current === noteId) {
+      setCurrentNote(null);
+      currentNoteIdRef.current = null;
+      setIsEditing(false);
+      setShowMobileList(true);
     }
-  }, [userId, deleteNote, setCurrentNote]);
+  }, [userId, deleteNote, setCurrentNote, trashList]);
+
+  const defaultList = useMemo(() => noteLists.find(l => l.isDefault), [noteLists]);
+
+  const handleRestore = useCallback(async (noteId: string) => {
+    if (!userId) return;
+    await restoreDeletedNote(userId, noteId, defaultList?.id);
+  }, [userId, restoreDeletedNote, defaultList]);
+
+  const handlePermanentDelete = useCallback(async (noteId: string) => {
+    if (!userId) return;
+    await permanentlyDeleteNote(userId, noteId);
+  }, [userId, permanentlyDeleteNote]);
 
   const handleCreateNote = useCallback(async (options?: { noteListId?: string; contextIds?: string[] }) => {
     if (!userId) return;
-    const inherited = getInheritedContexts(options?.noteListId, noteLists);
+    // Si no se especifica noteListId, usar la lista por defecto (General)
+    let targetListId = options?.noteListId;
+    if (!targetListId) {
+      const defaultList = noteLists.find(l => l.isDefault) || noteLists.find(l => l.name === 'General');
+      targetListId = defaultList?.id;
+    }
+    const inherited = getInheritedContexts(targetListId, noteLists);
     const mergedContexts = [...new Set([...(options?.contextIds || []), ...inherited])];
-    const noteId = await createNote(userId, '', { noteListId: options?.noteListId, contextIds: mergedContexts });
+    const noteId = await createNote(userId, '', { noteListId: targetListId, contextIds: mergedContexts });
     setIsEditing(true);
     setShowMobileList(false);
     return noteId;
@@ -343,6 +391,12 @@ export default function NotesPage() {
       setSaveStatus('saved');
     }, 500);
   }, [userId, updateNote]);
+
+  /* Focus mode: auto-collapse panels when editing */
+  const handleEditorFocus = useCallback(() => {
+    setSidebarCollapsed(true);
+    setIsNoteListCollapsed(true);
+  }, []);
 
   const handleTitleChange = useCallback(async (title: string) => {
     if (!userId) return;
@@ -403,6 +457,7 @@ export default function NotesPage() {
     switch (activeFilter) {
       case 'favorites': return 'Favoritas';
       case 'recent': return 'Recientes';
+      case 'deleted': return 'Eliminadas recientemente';
       case 'context': {
         const ctx = selectedContextId ? contextsMap.get(selectedContextId) : null;
         return ctx ? `${ctx.icon} ${ctx.name}` : 'Contexto';
@@ -416,6 +471,11 @@ export default function NotesPage() {
   }, [activeFilter, selectedContextId, selectedListId, contextsMap, noteListsMap]);
 
   /* ---- Note editor panel ------------------------------------------ */
+  const isCompact = !sidebarCollapsed && !isNoteListCollapsed;
+  const editorPadding = isCompact
+    ? 'pl-4 pr-4 md:pl-6 md:pr-6 py-6 md:py-8'
+    : 'px-4 md:px-6 lg:pl-12 lg:pr-12 py-6 md:py-10';
+
   const NoteEditorPanel = currentNote && (
     <div className="flex flex-col h-full bg-background">
       {/* Top bar */}
@@ -423,10 +483,23 @@ export default function NotesPage() {
         <div className="flex items-center gap-3">
           <button
             onClick={handleBack}
-            className="lg:hidden flex items-center gap-1.5 px-2 py-1.5 text-sm text-text-secondary/70 hover:text-text-primary hover:bg-surface/60 rounded-lg transition-colors"
+            className="flex items-center gap-1.5 px-2 py-1.5 text-sm text-text-secondary/70 hover:text-text-primary hover:bg-surface/60 rounded-lg transition-colors"
           >
             <IconArrowLeft />
           </button>
+          {/* Expand panels button (focus mode exit) */}
+          {sidebarCollapsed && isNoteListCollapsed && (
+            <button
+              onClick={() => { setSidebarCollapsed(false); setIsNoteListCollapsed(false); }}
+              className="hidden lg:flex items-center gap-1.5 px-2 py-1.5 text-sm text-text-secondary/70 hover:text-text-primary hover:bg-surface/60 rounded-lg transition-colors"
+              title="Salir del modo enfoque"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 3.75v4.5m0-4.5h4.5m-4.5 0L9 9M3.75 20.25v-4.5m0 4.5h4.5m-4.5 0L9 15M20.25 3.75h-4.5m4.5 0v4.5m0-4.5L15 9m5.25 11.25h-4.5m4.5 0v-4.5m0 4.5L15 15" />
+              </svg>
+              <span className="text-xs font-medium">Modo enfoque</span>
+            </button>
+          )}
           <SaveStatus status={saveStatus} />
         </div>
         <div className="flex items-center gap-2">
@@ -434,10 +507,8 @@ export default function NotesPage() {
           <OptionsMenu
             onDuplicate={() => alert('Duplicar - próximamente')}
             onDelete={() => {
-              if (confirm('¿Eliminar esta nota?')) {
-                deleteNote(userId!, currentNote.id);
-                handleBack();
-              }
+              deleteNote(userId!, currentNote.id);
+              handleBack();
             }}
             onCopyLink={() => {
               navigator.clipboard.writeText(window.location.href);
@@ -447,37 +518,31 @@ export default function NotesPage() {
         </div>
       </div>
 
-      {/* Metadata bar */}
-      <div className="px-4 md:px-6 py-3 border-b border-gray-100/30 dark:border-gray-800/30 shrink-0">
-        <div className="flex flex-wrap items-center gap-4">
-          <div className="flex items-center gap-2">
-            <span className="text-xs font-medium text-text-secondary/70">Lista</span>
+      {/* Editor surface */}
+      <div className="flex-1 overflow-y-auto overflow-x-visible">
+          <div className={`w-full min-h-full max-w-full md:max-w-4xl mx-auto transition-all duration-300 ${editorPadding}`}>
+          {/* Inline metadata tags */}
+          <div className="flex flex-wrap items-center gap-2 mb-4">
             <ListSelector
               lists={noteLists}
               selectedListId={currentNote.noteListId}
               onChange={handleNoteListChange}
               placeholder="Sin lista"
             />
-          </div>
-          <div className="flex items-center gap-2">
-            <span className="text-xs font-medium text-text-secondary/70">Contextos</span>
             <ContextSelectorChips
               selectedContextIds={currentNote.contextIds}
               onChange={handleNoteContextsChange}
             />
           </div>
-        </div>
-      </div>
 
-      {/* Editor surface */}
-      <div className="flex-1 overflow-y-auto overflow-x-visible">
-        <div className="w-full min-h-full pl-6 pr-6 md:pl-10 md:pr-10 lg:pl-12 lg:pr-12 py-8 md:py-10 max-w-4xl mx-auto">
           <BlockNoteEditor
             key={currentNote.id}
             title={currentNote.title}
             onTitleChange={handleTitleChange}
             initialContent={toPartialBlocks(currentNote.blocknoteContent)}
             onContentChange={(partialBlocks) => handleContentChange(fromPartialBlocks(partialBlocks))}
+            onFocus={handleEditorFocus}
+            compactMode={isCompact}
           />
         </div>
       </div>
@@ -489,13 +554,25 @@ export default function NotesPage() {
     <div className="flex flex-col h-full bg-surface/20">
       {/* Header */}
       <div className="flex items-center justify-between px-4 md:px-5 py-3 border-b border-gray-100 dark:border-gray-800/60 shrink-0">
-        <div>
-          <h2 className="text-sm font-semibold text-text-primary">{activeFilterLabel}</h2>
-          <p className="text-xs text-text-secondary/70">
-            {displayedNotes.length} {displayedNotes.length === 1 ? 'nota' : 'notas'}
-          </p>
-        </div>
         <div className="flex items-center gap-2">
+          {/* Mobile hamburger */}
+          <button
+            onClick={() => setIsMobileSidebarOpen(true)}
+            className="md:hidden p-1.5 -ml-1 rounded-lg text-text-secondary hover:text-text-primary hover:bg-surface transition-colors"
+            aria-label="Abrir filtros"
+          >
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5" />
+            </svg>
+          </button>
+          <div>
+            <h2 className="text-sm font-semibold text-text-primary">{activeFilterLabel}</h2>
+            <p className="text-xs text-text-secondary/70">
+              {displayedNotes.length} {displayedNotes.length === 1 ? 'nota' : 'notas'}
+            </p>
+          </div>
+        </div>
+        <div className="flex items-center gap-1">
           <button
             onClick={() => openQuickCapture()}
             className="p-2 rounded-lg text-text-secondary hover:text-text-primary hover:bg-surface transition-colors"
@@ -505,15 +582,27 @@ export default function NotesPage() {
               <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
             </svg>
           </button>
+          {/* Desktop create button */}
           <button
             onClick={() => handleCreateNote()}
-            className="flex items-center gap-1.5 px-3 py-2 bg-primary text-white rounded-lg text-sm font-semibold hover:bg-primary/90 transition-colors shadow-sm"
+            className="hidden md:flex items-center gap-1.5 px-3 py-2 bg-primary text-white rounded-lg text-sm font-semibold hover:bg-primary/90 transition-colors shadow-sm"
           >
             <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
             </svg>
             <span className="hidden sm:inline">Nueva</span>
           </button>
+          {/* Collapse note list button (desktop only) */}
+          <Tooltip label="Ocultar lista" placement="bottom">
+            <button
+              onClick={() => setIsNoteListCollapsed(true)}
+              className="hidden lg:flex p-2 rounded-lg text-text-secondary hover:text-text-primary hover:bg-surface transition-colors"
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5" />
+              </svg>
+            </button>
+          </Tooltip>
         </div>
       </div>
 
@@ -549,9 +638,11 @@ export default function NotesPage() {
             onNoteClick={handleNoteClick}
             onToggleFavorite={handleToggleFavorite}
             onDelete={handleDelete}
+            onRestore={handleRestore}
+            onPermanentDelete={handlePermanentDelete}
             onCreateNote={() => handleCreateNote()}
-            emptyTitle={activeFilter === 'favorites' ? 'No tienes favoritas' : activeFilter === 'context' ? 'No hay notas en este contexto' : activeFilter === 'list' ? 'No hay notas en esta lista' : 'Aún no tienes notas'}
-            emptyDescription={activeFilter === 'favorites' ? 'Marca notas como favoritas para acceder rápidamente.' : activeFilter === 'context' ? 'Crea una nota y asígnale este contexto.' : activeFilter === 'list' ? 'Crea una nota en esta lista.' : 'Comienza capturando una idea, una reunión o cualquier pensamiento.'}
+            emptyTitle={activeFilter === 'favorites' ? 'No tienes favoritas' : activeFilter === 'context' ? 'No hay notas en este contexto' : activeFilter === 'list' ? 'No hay notas en esta lista' : activeFilter === 'deleted' ? 'Papelera vacía' : 'Aún no tienes notas'}
+            emptyDescription={activeFilter === 'favorites' ? 'Marca notas como favoritas para acceder rápidamente.' : activeFilter === 'context' ? 'Crea una nota y asígnale este contexto.' : activeFilter === 'list' ? 'Crea una nota en esta lista.' : activeFilter === 'deleted' ? 'Las notas eliminadas aparecerán aquí por 30 días.' : 'Comienza capturando una idea, una reunión o cualquier pensamiento.'}
           />
         )}
       </div>
@@ -568,14 +659,37 @@ export default function NotesPage() {
         selectedListId={selectedListId}
         isCollapsed={sidebarCollapsed}
         onToggleCollapse={() => setSidebarCollapsed(c => !c)}
+        isMobileOpen={isMobileSidebarOpen}
+        onMobileClose={() => setIsMobileSidebarOpen(false)}
       />
 
       {/* Main area */}
       <div className="flex-1 flex overflow-hidden">
         {/* Note list - hidden on mobile when editing */}
-        <div className={`${showMobileList ? 'flex' : 'hidden'} lg:flex w-full lg:w-80 xl:w-96 flex-col border-r border-gray-100 dark:border-gray-800/60`}>
+        <div className={`
+          ${showMobileList ? 'flex' : 'hidden'}
+          lg:flex flex-col border-r border-gray-100 dark:border-gray-800/60
+          transition-all duration-300 ease-in-out
+          ${isNoteListCollapsed ? 'lg:w-0 lg:opacity-0 lg:overflow-hidden lg:border-r-0' : 'w-full lg:w-80 xl:w-96'}
+        `}>
           {NoteListPanel}
         </div>
+
+        {/* Collapsed note list indicator bar (desktop only) */}
+        {isNoteListCollapsed && (
+          <div className="hidden lg:flex flex-col items-center py-3 bg-surface/40 border-r border-gray-100 dark:border-gray-800/60 w-10 shrink-0">
+            <Tooltip label="Mostrar lista de notas" placement="right">
+              <button
+                onClick={() => setIsNoteListCollapsed(false)}
+                className="flex items-center justify-center w-8 h-8 rounded-lg text-text-secondary hover:text-text-primary hover:bg-surface transition-colors"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" />
+                </svg>
+              </button>
+            </Tooltip>
+          </div>
+        )}
 
         {/* Editor - hidden on mobile when not editing */}
         {isEditing && currentNote && (
@@ -605,6 +719,18 @@ export default function NotesPage() {
           </div>
         )}
       </div>
+
+      {/* Mobile FAB */}
+      {showMobileList && (
+        <button
+          onClick={() => handleCreateNote()}
+          className="md:hidden fixed bottom-6 right-6 w-14 h-14 bg-primary text-white rounded-full shadow-lg shadow-primary/30 hover:bg-primary/90 active:scale-95 transition-all z-30 flex items-center justify-center"
+        >
+          <svg className="w-7 h-7" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
+          </svg>
+        </button>
+      )}
 
       <QuickCaptureModal />
     </div>

@@ -61,7 +61,7 @@ export function ListSelector({ lists, selectedListId, onChange, placeholder = 'S
               <span className="w-2.5 h-2.5 rounded-full border border-gray-300 dark:border-gray-600 shrink-0" />
               <span>Sin lista</span>
             </button>
-            {lists.map(list => (
+            {lists.filter(l => !l.isTrash).map(list => (
               <button
                 key={list.id}
                 onClick={() => {

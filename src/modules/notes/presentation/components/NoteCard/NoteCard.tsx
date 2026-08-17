@@ -1,6 +1,8 @@
+import { useMemo } from 'react';
 import type { Note } from '../../../domain/models/Note';
 import type { Context } from '../../../../contexts/domain/models/types';
 import type { NoteList } from '../../../domain/models/NoteList';
+import { InlineConfirm } from '../InlineConfirm/InlineConfirm';
 
 interface NoteCardProps {
   note: Note;
@@ -9,6 +11,8 @@ interface NoteCardProps {
   onClick: () => void;
   onToggleFavorite: () => void;
   onDelete: () => void;
+  onRestore?: () => void;
+  onPermanentDelete?: () => void;
 }
 
 function formatDate(timestamp: number) {
@@ -26,20 +30,34 @@ function formatDate(timestamp: number) {
   return date.toLocaleDateString('es-ES', { day: 'numeric', month: 'short' });
 }
 
-export function NoteCard({ note, contextsMap, listsMap, onClick, onToggleFavorite, onDelete }: NoteCardProps) {
+export function NoteCard({ note, contextsMap, listsMap, onClick, onToggleFavorite, onDelete, onRestore, onPermanentDelete }: NoteCardProps) {
   const preview = note.plainText?.slice(0, 140) || 'Sin contenido';
   const noteContexts = note.contextIds
     .map(id => contextsMap.get(id))
     .filter(Boolean) as Context[];
   const noteList = note.noteListId ? listsMap.get(note.noteListId) : undefined;
+  const isDeleted = note.isDeleted;
+
+  // Calcular días restantes para eliminación permanente (30 días)
+  const daysRemaining = useMemo(() => {
+    if (!isDeleted || !note.deletedAt) return null;
+    const THIRTY_DAYS_MS = 30 * 24 * 60 * 60 * 1000;
+    const remainingMs = note.deletedAt + THIRTY_DAYS_MS - Date.now();
+    const days = Math.ceil(remainingMs / (24 * 60 * 60 * 1000));
+    return Math.max(0, days);
+  }, [isDeleted, note.deletedAt]);
 
   return (
     <div
       onClick={onClick}
-      className="group relative bg-surface rounded-2xl p-4 md:p-5 shadow-sm hover:shadow-md transition-all cursor-pointer border border-transparent hover:border-primary/15"
+      className={`group relative rounded-2xl p-4 md:p-5 shadow-sm hover:shadow-md transition-all cursor-pointer border ${
+        isDeleted
+          ? 'bg-red-50/30 dark:bg-red-900/10 border-red-100/30 dark:border-red-900/20'
+          : 'bg-surface border-transparent hover:border-primary/15'
+      }`}
     >
       {/* Pin indicator */}
-      {note.isPinned && (
+      {note.isPinned && !isDeleted && (
         <div className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-primary rounded-full flex items-center justify-center shadow-sm">
           <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" d="M15.042 21.672L13.684 16.6m0 0l-2.51 2.225.569-9.47 5.227 7.917-3.286-.672zM12 2.25V4.5m5.834.166l-1.591 1.591M20.25 10.5H18M7.757 14.743l-1.59 1.59M6 10.5H3.75m4.007-4.243l-1.59-1.59" />
@@ -73,13 +91,27 @@ export function NoteCard({ note, contextsMap, listsMap, onClick, onToggleFavorit
               </span>
             ))}
 
-            {noteList && (
+            {noteList && !noteList.isTrash && (
               <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-medium bg-gray-100 dark:bg-gray-800 text-text-secondary">
                 <span
                   className="w-1.5 h-1.5 rounded-full"
                   style={{ backgroundColor: noteList.color }}
                 />
                 {noteList.name}
+              </span>
+            )}
+
+            {/* Días restantes para notas eliminadas */}
+            {daysRemaining !== null && (
+              <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-medium ${
+                daysRemaining <= 3
+                  ? 'bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400'
+                  : 'bg-gray-100 dark:bg-gray-800 text-text-secondary'
+              }`}>
+                <svg className="w-3 h-3" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                {daysRemaining === 0 ? 'Se elimina hoy' : `${daysRemaining}d restantes`}
               </span>
             )}
 
@@ -91,32 +123,71 @@ export function NoteCard({ note, contextsMap, listsMap, onClick, onToggleFavorit
 
         {/* Actions - visible on hover */}
         <div className="flex flex-col items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-          <button
-            onClick={(e) => { e.stopPropagation(); onToggleFavorite(); }}
-            className={`p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors ${
-              note.isFavorite ? 'text-yellow-500' : 'text-text-secondary'
-            }`}
-            title={note.isFavorite ? 'Quitar de favoritos' : 'Agregar a favoritos'}
-          >
-            {note.isFavorite ? (
-              <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
-                <path d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z" />
-              </svg>
-            ) : (
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z" />
-              </svg>
-            )}
-          </button>
-          <button
-            onClick={(e) => { e.stopPropagation(); onDelete(); }}
-            className="p-2 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/20 text-text-secondary hover:text-red-500 transition-colors"
-            title="Eliminar"
-          >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0" />
-            </svg>
-          </button>
+          {isDeleted ? (
+            <>
+              {onRestore && (
+                <button
+                  onClick={(e) => { e.stopPropagation(); onRestore(); }}
+                  className="p-2 rounded-lg hover:bg-green-50 dark:hover:bg-green-900/20 text-text-secondary hover:text-green-500 transition-colors"
+                  title="Restaurar nota"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M9 15L3 9m0 0l6-6M3 9h12a6 6 0 010 12h-3" />
+                  </svg>
+                </button>
+              )}
+              {onPermanentDelete && (
+                <InlineConfirm
+                  title="¿Eliminar permanentemente?"
+                  message="Esta nota se eliminará para siempre. No se puede deshacer."
+                  confirmLabel="Eliminar"
+                  cancelLabel="Cancelar"
+                  confirmVariant="danger"
+                  onConfirm={onPermanentDelete}
+                  placement="right"
+                  trigger={
+                    <button
+                      className="p-2 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/20 text-text-secondary hover:text-red-500 transition-colors"
+                      title="Eliminar permanentemente"
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0" />
+                      </svg>
+                    </button>
+                  }
+                />
+              )}
+            </>
+          ) : (
+            <>
+              <button
+                onClick={(e) => { e.stopPropagation(); onToggleFavorite(); }}
+                className={`p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors ${
+                  note.isFavorite ? 'text-yellow-500' : 'text-text-secondary'
+                }`}
+                title={note.isFavorite ? 'Quitar de favoritos' : 'Agregar a favoritos'}
+              >
+                {note.isFavorite ? (
+                  <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+                    <path d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z" />
+                  </svg>
+                ) : (
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z" />
+                  </svg>
+                )}
+              </button>
+              <button
+                onClick={(e) => { e.stopPropagation(); onDelete(); }}
+                className="p-2 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/20 text-text-secondary hover:text-red-500 transition-colors"
+                title="Eliminar"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0" />
+                </svg>
+              </button>
+            </>
+          )}
         </div>
       </div>
     </div>
@@ -130,6 +201,8 @@ interface NoteCardListProps {
   onNoteClick: (note: Note) => void;
   onToggleFavorite: (noteId: string) => void;
   onDelete: (noteId: string) => void;
+  onRestore?: (noteId: string) => void;
+  onPermanentDelete?: (noteId: string) => void;
   onCreateNote: () => void;
   emptyTitle?: string;
   emptyDescription?: string;
@@ -143,6 +216,8 @@ export function NoteCardList({
   onNoteClick,
   onToggleFavorite,
   onDelete,
+  onRestore,
+  onPermanentDelete,
   onCreateNote,
   emptyTitle = 'Aún no hay notas aquí',
   emptyDescription = 'Crea una nota para comenzar a organizar tu conocimiento.',
@@ -194,6 +269,8 @@ export function NoteCardList({
                 onClick={() => onNoteClick(note)}
                 onToggleFavorite={() => onToggleFavorite(note.id)}
                 onDelete={() => onDelete(note.id)}
+                onRestore={onRestore ? () => onRestore(note.id) : undefined}
+                onPermanentDelete={onPermanentDelete ? () => onPermanentDelete(note.id) : undefined}
               />
             ))}
           </div>
@@ -217,6 +294,8 @@ export function NoteCardList({
                 onClick={() => onNoteClick(note)}
                 onToggleFavorite={() => onToggleFavorite(note.id)}
                 onDelete={() => onDelete(note.id)}
+                onRestore={onRestore ? () => onRestore(note.id) : undefined}
+                onPermanentDelete={onPermanentDelete ? () => onPermanentDelete(note.id) : undefined}
               />
             ))}
           </div>

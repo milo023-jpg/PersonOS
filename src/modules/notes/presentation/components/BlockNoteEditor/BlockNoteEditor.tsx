@@ -10,6 +10,8 @@ interface BlockNoteEditorProps {
   initialContent?: PartialBlock[];
   onContentChange: (blocks: Record<string, unknown>[]) => void;
   editable?: boolean;
+  onFocus?: () => void;
+  compactMode?: boolean;
 }
 
 // Debounce helper
@@ -39,6 +41,8 @@ export const BlockNoteEditor = memo(function BlockNoteEditor({
   initialContent,
   onContentChange,
   editable = true,
+  onFocus,
+  compactMode = false,
 }: BlockNoteEditorProps) {
   const surfaceRef = useRef<HTMLDivElement>(null);
   const titleRef = useRef<HTMLTextAreaElement>(null);
@@ -96,7 +100,8 @@ export const BlockNoteEditor = memo(function BlockNoteEditor({
       return;
     }
     editor?.focus();
-  }, [editor]);
+    onFocus?.();
+  }, [editor, onFocus]);
 
   // Sync external title changes ONLY when not typing
   useEffect(() => {
@@ -127,7 +132,7 @@ export const BlockNoteEditor = memo(function BlockNoteEditor({
   return (
     <div
       ref={surfaceRef}
-      className="relative min-h-fit cursor-text pl-2"
+      className="relative min-h-fit cursor-text"
       onClick={handleSurfaceClick}
     >
       {/* Title - UNCONTROLLED textarea for zero-lag typing */}
@@ -136,17 +141,22 @@ export const BlockNoteEditor = memo(function BlockNoteEditor({
         defaultValue={title}
         onInput={handleTitleInput}
         onKeyDown={handleTitleKeyDown}
+        onFocus={onFocus}
         placeholder="Título de la nota"
         rows={1}
-        className="w-full bg-transparent outline-none resize-none overflow-hidden
-                   text-4xl md:text-[2.75rem] font-bold tracking-tight
+        className={`w-full bg-transparent outline-none resize-none overflow-hidden
+                   font-bold tracking-tight
                    text-text-primary placeholder:text-text-secondary/25
-                   mb-8 md:mb-10 leading-[1.1]"
+                   leading-[1.1] transition-all duration-300
+                   ${compactMode
+                     ? 'text-2xl md:text-3xl mb-4 md:mb-6'
+                     : 'text-4xl md:text-[2.75rem] mb-8 md:mb-10'
+                   }`}
         style={{ height: 'auto' }}
       />
 
       {/* BlockNote Editor - isolated, won't rerender on title changes */}
-      <div className="min-h-[50vh]">
+      <div className={`min-h-[50vh] transition-all duration-300 ${compactMode ? 'text-sm' : ''}`}>
         <BlockNoteView
           editor={editor}
           editable={editable}

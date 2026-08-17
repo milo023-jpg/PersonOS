@@ -6,5 +6,6 @@ export interface NoteList {
   order: number;
   createdAt: number;
   isDefault?: boolean;
+  isTrash?: boolean;
   defaultContextId?: string;
 }

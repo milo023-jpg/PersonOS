@@ -45,9 +45,16 @@ export function QuickCaptureModal() {
   const handleCreate = async () => {
     if (!title.trim() || !userId) return;
 
+    // Si no se seleccionó lista, usar la lista por defecto (General)
+    let targetListId = selectedNoteListId;
+    if (!targetListId) {
+      const defaultList = noteLists.find(l => l.isDefault) || noteLists.find(l => l.name === 'General');
+      targetListId = defaultList?.id;
+    }
+
     try {
       await createNote(userId, title.trim(), {
-        noteListId: selectedNoteListId,
+        noteListId: targetListId,
         contextIds: mergedContextIds,
       });
       setTitle('');

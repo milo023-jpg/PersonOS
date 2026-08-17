@@ -4,7 +4,7 @@ import { createEmptyNote, extractPlainText, countWords, extractTextFromBlockNote
 import type { SearchFilters } from '../../domain/repositories/notes.repository.interface';
 import { logger } from '../../../../shared/utils/logger';
 
-export type NotesActiveFilter = 'all' | 'favorites' | 'recent' | 'context' | 'list';
+export type NotesActiveFilter = 'all' | 'favorites' | 'recent' | 'context' | 'list' | 'deleted';
 
 interface NotesState {
   notes: Note[];
@@ -25,7 +25,7 @@ interface NotesActions {
   fetchNote: (userId: string, noteId: string) => Promise<void>;
   createNote: (userId: string, title?: string, options?: { noteListId?: string; contextIds?: string[] }) => Promise<string>;
   updateNote: (userId: string, noteId: string, partial: Partial<Note>) => Promise<void>;
-  deleteNote: (userId: string, noteId: string) => Promise<void>;
+  deleteNote: (userId: string, noteId: string, trashListId?: string) => Promise<void>;
   restoreNote: (userId: string, noteId: string) => Promise<void>;
   toggleFavorite: (userId: string, noteId: string) => Promise<void>;
   togglePin: (userId: string, noteId: string) => Promise<void>;
@@ -33,6 +33,9 @@ interface NotesActions {
   removeContext: (userId: string, noteId: string, contextId: string) => Promise<void>;
   setNoteList: (userId: string, noteId: string, noteListId: string | undefined) => Promise<void>;
   search: (userId: string, query: string, filters?: SearchFilters) => Promise<void>;
+  fetchDeletedNotes: (userId: string) => Promise<void>;
+  permanentlyDeleteNote: (userId: string, noteId: string) => Promise<void>;
+  restoreDeletedNote: (userId: string, noteId: string, targetListId?: string) => Promise<void>;
   setCurrentNote: (note: Note | null) => void;
   setSelectedContext: (contextId: string | null) => void;
   setSelectedListId: (listId: string | null) => void;
@@ -65,10 +68,20 @@ export const useNotesStore = create<NotesStore>((set, get) => ({
     set({ isLoading: true, error: null });
     try {
       const repo = getNotesRepository(userId);
-      const notes = await repo.listRecent(200);
+      const allNotes = await repo.listRecent(200);
 
-      // Convertir notas antiguas (con `blocks` pero sin `blocknoteContent`) en memoria
-      const migratedNotes = notes.map((note) => {
+      // Cleanup: eliminar permanentemente notas en papelera con >30 días
+      const THIRTY_DAYS_MS = 30 * 24 * 60 * 60 * 1000;
+      const now = Date.now();
+      const notesToDelete = allNotes.filter(
+        n => n.isDeleted && n.deletedAt && (now - n.deletedAt) > THIRTY_DAYS_MS
+      );
+      const deletedIds = new Set(notesToDelete.map(n => n.id));
+      await Promise.all(notesToDelete.map(n => repo.permanentDelete(n.id)));
+
+      // Incluir todas las notas (activas y eliminadas), excepto las limpiadas permanentemente
+      const keptNotes = allNotes.filter(n => !deletedIds.has(n.id));
+      const migratedNotes = keptNotes.map((note) => {
         if (note.blocks && note.blocks.length > 0 && (!note.blocknoteContent || note.blocknoteContent.length === 0)) {
           return {
             ...note,
@@ -203,16 +216,29 @@ export const useNotesStore = create<NotesStore>((set, get) => ({
     }
   },
 
-  deleteNote: async (userId: string, noteId: string) => {
+  deleteNote: async (userId: string, noteId: string, trashListId?: string) => {
     const previousNotes = get().notes;
+    const deletedAt = Date.now();
+
+    // Optimistic update: marcar como eliminada y mover a papelera
     set(state => ({
-      notes: state.notes.filter(n => n.id !== noteId),
+      notes: state.notes.map(n =>
+        n.id === noteId
+          ? { ...n, isDeleted: true, deletedAt, noteListId: trashListId, isFavorite: false, isPinned: false }
+          : n
+      ),
       currentNote: state.currentNote?.id === noteId ? null : state.currentNote,
     }));
 
     try {
       const repo = getNotesRepository(userId);
-      await repo.softDelete(noteId);
+      await repo.update(noteId, {
+        isDeleted: true,
+        deletedAt,
+        noteListId: trashListId,
+        isFavorite: false,
+        isPinned: false,
+      });
     } catch (err) {
       logger.error('Failed to delete note, rolling back', err);
       set({ notes: previousNotes, error: 'No se pudo eliminar la nota.' });
@@ -262,6 +288,56 @@ export const useNotesStore = create<NotesStore>((set, get) => ({
     await get().updateNote(userId, noteId, { noteListId });
   },
 
+  fetchDeletedNotes: async (userId: string) => {
+    set({ isLoading: true, error: null });
+    try {
+      const repo = getNotesRepository(userId);
+      const deletedNotes = await repo.listDeleted();
+      set(state => ({
+        notes: [...state.notes.filter(n => !n.isDeleted), ...deletedNotes],
+        isLoading: false,
+      }));
+    } catch (err) {
+      logger.error('Failed to fetch deleted notes', err);
+      set({ isLoading: false });
+    }
+  },
+
+  permanentlyDeleteNote: async (userId: string, noteId: string) => {
+    set(state => ({
+      notes: state.notes.filter(n => n.id !== noteId),
+      currentNote: state.currentNote?.id === noteId ? null : state.currentNote,
+    }));
+    try {
+      const repo = getNotesRepository(userId);
+      await repo.permanentDelete(noteId);
+    } catch (err) {
+      logger.error('Failed to permanently delete note', err);
+      set({ error: 'No se pudo eliminar la nota permanentemente.' });
+    }
+  },
+
+  restoreDeletedNote: async (userId: string, noteId: string, targetListId?: string) => {
+    try {
+      const repo = getNotesRepository(userId);
+      await repo.update(noteId, {
+        isDeleted: false,
+        deletedAt: undefined,
+        noteListId: targetListId,
+      });
+      set(state => ({
+        notes: state.notes.map(n =>
+          n.id === noteId
+            ? { ...n, isDeleted: false, deletedAt: undefined, noteListId: targetListId }
+            : n
+        ),
+      }));
+    } catch (err) {
+      logger.error('Failed to restore note', err);
+      set({ error: 'No se pudo restaurar la nota.' });
+    }
+  },
+
   search: async (userId: string, query: string, filters?: SearchFilters) => {
     if (!query.trim()) {
       set({ searchResults: [], searchQuery: query });
@@ -280,8 +356,8 @@ export const useNotesStore = create<NotesStore>((set, get) => ({
   },
 
   setCurrentNote: (note) => set({ currentNote: note }),
-  setSelectedContext: (contextId) => set({ selectedContextId: contextId, activeFilter: contextId ? 'context' : 'all' }),
-  setSelectedListId: (listId) => set({ selectedListId: listId, activeFilter: listId ? 'list' : 'all' }),
+  setSelectedContext: (contextId) => set({ selectedContextId: contextId }),
+  setSelectedListId: (listId) => set({ selectedListId: listId }),
   setActiveFilter: (filter) => set({ activeFilter: filter }),
   setViewMode: (mode) => set({ viewMode: mode }),
   setSearchQuery: (query) => set({ searchQuery: query }),
