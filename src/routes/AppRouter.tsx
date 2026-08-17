@@ -1,5 +1,6 @@
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import MainLayout from "../layout/MainLayout";
+import RouteFavicon from "../shared/RouteFavicon";
 import Dashboard from '../modules/dashboard/presentation/pages/Dashboard';
 import HabitsPage from '../modules/habits/presentation/pages/HabitsPage';
 import HabitDetailsPage from '../modules/habits/presentation/pages/HabitDetailsPage';
@@ -20,6 +21,7 @@ import LoginPage from '../modules/auth/presentation/pages/LoginPage';
 export default function AppRouter() {
     return (
         <BrowserRouter>
+            <RouteFavicon />
             <Routes>
                 <Route path="/login" element={<LoginPage />} />
                 <Route path="/auth-required" element={<LoginPage />} />
