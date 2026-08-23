@@ -26,6 +26,9 @@ export interface Task {
   dueDate?: number; // Usamos numbers (timestamps de JS) para facilitar cliente
   scheduledDate?: number;
 
+  reminderAt?: number; // Timestamp del recordatorio local programado
+  reminderStatus?: 'scheduled' | 'sent' | 'missed';
+
   createdAt: number;
   updatedAt: number;
   completedAt?: number;

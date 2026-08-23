@@ -22,11 +22,15 @@ export default defineConfig({
     plugins: [
         react(),
         VitePWA({
+            strategies: 'injectManifest',
+            srcDir: 'src',
+            filename: 'service-worker.ts',
             registerType: 'autoUpdate',
-            workbox: {
+            injectRegister: 'auto',
+            includeAssets: ['favicon.svg', 'apple-touch-icon.png', 'masked-icon.svg'],
+            injectManifest: {
                 globPatterns: ['**/*.{js,css,html,ico,png,svg}']
             },
-            includeAssets: ['favicon.svg', 'apple-touch-icon.png', 'masked-icon.svg'],
             manifest: {
                 name: 'Sistema Operativo Personal',
                 short_name: 'PersonOS',

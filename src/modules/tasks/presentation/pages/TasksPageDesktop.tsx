@@ -12,6 +12,8 @@ import InlineTaskCreator from '../components/TaskList/InlineTaskCreator';
 import { GENERAL_LIST_ID } from '../../domain/constants/defaults';
 import { isDueBeforeOrToday, toTaskDateTimestamp } from '../../domain/utils/taskDate';
 import { logger } from '../../../../shared/utils/logger';
+import { useReminderSync } from '../../../../shared/hooks/useReminderSync';
+import { buildTaskReminder } from '../../application/services/taskReminder';
 
 type ViewMode = 'today' | 'all' | 'lists' | 'board';
 
@@ -32,6 +34,9 @@ export default function TasksPageDesktop() {
             fetchLists(userId);
         }
     }, [userId, fetchTasks, fetchLists]);
+
+    // Sincronizar recordatorios locales con las tareas (fuego-y-olvido silencioso)
+    useReminderSync(tasks, buildTaskReminder, [tasks]);
 
     const tabs = useMemo(() => [
         {

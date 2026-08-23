@@ -48,6 +48,7 @@ export default function TaskItem({ task, onSelect, bgClass }: Props) {
     const { contexts } = useContextsStore();
 
     const [isExpanded, setIsExpanded] = useState(false);
+    const [now] = useState<number>(() => Date.now());
 
     const isCompleted = task.status === 'completed';
     const normalizedDueDate = task.dueDate ? normalizeTaskDateTimestamp(task.dueDate) : undefined;
@@ -113,11 +114,20 @@ export default function TaskItem({ task, onSelect, bgClass }: Props) {
                     <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 mt-1.5 text-[11px] font-bold text-text-secondary">
                         {/* Fecha */}
                         {normalizedDueDate !== undefined && (
-                            <span className={`flex items-center gap-1 ${normalizedDueDate < Date.now() && !isCompleted && getIntelligentDate(normalizedDueDate) !== 'Hoy' ? 'text-red-500' : ''}`}>
+                            <span className={`flex items-center gap-1 ${normalizedDueDate < now && !isCompleted && getIntelligentDate(normalizedDueDate) !== 'Hoy' ? 'text-red-500' : ''}`}>
                                 <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
                                 </svg>
                                 {getIntelligentDate(normalizedDueDate)}
+                            </span>
+                        )}
+
+                        {/* Recordatorio */}
+                        {task.reminderAt && task.reminderAt > now && !isCompleted && (
+                            <span className="flex items-center gap-1 text-primary dark:text-purple-400" title={`Recordatorio: ${new Date(task.reminderAt).toLocaleString('es-ES')}`}>
+                                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
+                                </svg>
                             </span>
                         )}
 

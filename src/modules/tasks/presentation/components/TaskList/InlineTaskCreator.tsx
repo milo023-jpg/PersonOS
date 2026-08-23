@@ -7,6 +7,8 @@ import { GENERAL_LIST_ID } from '../../../domain/constants/defaults';
 import type { Task, TaskPriority, TaskStatus } from '../../../domain/models/Task';
 import DatePickerPopover from './DatePickerPopover';
 import { logger } from '../../../../../shared/utils/logger';
+import { buildTaskReminder, cancelTaskReminder } from '../../../application/services/taskReminder';
+import { localNotifications } from '../../../../../services/localNotifications.service';
 
 interface Props {
   onCancel: () => void;
@@ -22,6 +24,38 @@ const priorities: { value: TaskPriority, label: string, color: string }[] = [
     { value: 'high', label: 'Alta', color: 'text-orange-500' },
     { value: 'medium', label: 'Media', color: 'text-blue-400' },
     { value: 'low', label: 'Baja', color: 'text-gray-400' }
+];
+
+function formatReminderInput(timestamp?: number): string {
+    if (!timestamp) return '';
+    const d = new Date(timestamp);
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    const hours = String(d.getHours()).padStart(2, '0');
+    const minutes = String(d.getMinutes()).padStart(2, '0');
+    return `${year}-${month}-${day}T${hours}:${minutes}`;
+}
+
+const quickReminderOptions = [
+    { label: 'En 1 hora', compute: () => Date.now() + 60 * 60 * 1000 },
+    {
+        label: 'Esta noche (21:00)',
+        compute: () => {
+            const d = new Date();
+            d.setHours(21, 0, 0, 0);
+            return d.getTime();
+        },
+    },
+    {
+        label: 'Mañana 09:00',
+        compute: () => {
+            const d = new Date();
+            d.setDate(d.getDate() + 1);
+            d.setHours(9, 0, 0, 0);
+            return d.getTime();
+        },
+    },
 ];
 
 export default function InlineTaskCreator({ onCancel, defaultContextId, defaultListId, defaultDate, defaultStatus = 'todo', editTask }: Props) {
@@ -51,6 +85,11 @@ export default function InlineTaskCreator({ onCancel, defaultContextId, defaultL
     const [isPriorityOpen, setIsPriorityOpen] = useState(false);
     const [isDateOpen, setIsDateOpen] = useState(false);
     const [isTimeOpen, setIsTimeOpen] = useState(false);
+    const [isReminderOpen, setIsReminderOpen] = useState(false);
+
+    const [reminderAt, setReminderAt] = useState<number | undefined>(editTask?.reminderAt);
+    const [reminderInput, setReminderInput] = useState<string>(formatReminderInput(editTask?.reminderAt));
+    const [reminderError, setReminderError] = useState<string | null>(null);
     
     // Selectors
     const [isListOpen, setIsListOpen] = useState(false);
@@ -64,6 +103,7 @@ export default function InlineTaskCreator({ onCancel, defaultContextId, defaultL
     const listRef = useRef<HTMLDivElement>(null);
     const contextRef = useRef<HTMLDivElement>(null);
     const timeRef = useRef<HTMLDivElement>(null);
+    const reminderRef = useRef<HTMLDivElement>(null);
 
     // Cerrar dropdown si se hace click fuera
     useEffect(() => {
@@ -80,6 +120,9 @@ export default function InlineTaskCreator({ onCancel, defaultContextId, defaultL
             if (timeRef.current && !timeRef.current.contains(event.target as Node)) {
                 setIsTimeOpen(false);
             }
+            if (reminderRef.current && !reminderRef.current.contains(event.target as Node)) {
+                setIsReminderOpen(false);
+            }
         };
         document.addEventListener('mousedown', handleClickOutside);
         return () => document.removeEventListener('mousedown', handleClickOutside);
@@ -91,6 +134,18 @@ export default function InlineTaskCreator({ onCancel, defaultContextId, defaultL
         if (!title.trim() || !userId || isLoading) return;
 
         setIsLoading(true);
+        setReminderError(null);
+
+        let scheduledAt: number | undefined;
+        if (reminderAt !== undefined) {
+            if (reminderAt <= Date.now()) {
+                setReminderError('El recordatorio debe ser en el futuro.');
+                setIsLoading(false);
+                return;
+            }
+            scheduledAt = reminderAt;
+        }
+
         try {
             const updates: Partial<Task> = {
                 title: title.trim(),
@@ -122,7 +177,17 @@ export default function InlineTaskCreator({ onCancel, defaultContextId, defaultL
             
             updates.contextId = selectedContextId || undefined;
 
+            if (reminderAt !== undefined) {
+                updates.reminderAt = reminderAt;
+                updates.reminderStatus = 'scheduled';
+            } else {
+                updates.reminderAt = undefined;
+                updates.reminderStatus = undefined;
+            }
+
+            let savedTaskId: string;
             if (editTask) {
+                savedTaskId = editTask.id;
                 await updateTask(userId, editTask.id, updates);
             } else {
                 const newTask: Omit<Task, 'id'> = {
@@ -135,7 +200,28 @@ export default function InlineTaskCreator({ onCancel, defaultContextId, defaultL
                     source: 'manual',
                     subtasks: [],
                 };
-                await addTask(newTask);
+                savedTaskId = await addTask(newTask);
+            }
+
+            // Sincronizar la notificación local
+            if (scheduledAt !== undefined) {
+                let permission = Notification.permission;
+                if (permission !== 'granted') {
+                    permission = await localNotifications.requestPermission();
+                }
+                if (permission === 'granted') {
+                    const payload = buildTaskReminder({
+                        id: savedTaskId,
+                        title: title.trim(),
+                        status: editTask?.status || defaultStatus,
+                        reminderAt: scheduledAt,
+                    } as Task);
+                    if (payload) {
+                        await localNotifications.scheduleReminder(payload);
+                    }
+                }
+            } else if (editTask?.reminderAt !== undefined) {
+                await cancelTaskReminder(editTask.id);
             }
 
             // Cerrar el modal/formulario
@@ -160,6 +246,42 @@ export default function InlineTaskCreator({ onCancel, defaultContextId, defaultL
         const today = new Date();
         if (d.toDateString() === today.toDateString()) return 'Hoy';
         return d.toLocaleDateString('es-ES', { month: 'short', day: 'numeric' });
+    };
+
+    const formatScheduledReminder = (timestamp: number) =>
+        new Date(timestamp).toLocaleString('es-ES', {
+            day: 'numeric',
+            month: 'short',
+            hour: '2-digit',
+            minute: '2-digit',
+        });
+
+    const applyReminderTime = (at: number) => {
+        setReminderInput(formatReminderInput(at));
+        setReminderAt(at);
+        setReminderError(null);
+    };
+
+    const handleSaveReminderInput = () => {
+        const timestamp = reminderInput ? new Date(reminderInput).getTime() : NaN;
+        if (!Number.isFinite(timestamp)) {
+            setReminderError('Elige una fecha y hora válidas.');
+            return;
+        }
+        if (timestamp <= Date.now()) {
+            setReminderError('El recordatorio debe ser en el futuro.');
+            return;
+        }
+        setReminderAt(timestamp);
+        setReminderError(null);
+        setIsReminderOpen(false);
+    };
+
+    const handleClearReminder = () => {
+        setReminderAt(undefined);
+        setReminderInput('');
+        setReminderError(null);
+        setIsReminderOpen(false);
     };
 
     return (
@@ -275,6 +397,64 @@ export default function InlineTaskCreator({ onCancel, defaultContextId, defaultL
                                     {p.label}
                                 </button>
                             ))}
+                        </div>
+                    )}
+                </div>
+
+                {/* 3. Recordatorio */}
+                <div className="relative shrink-0" ref={reminderRef}>
+                    <button 
+                        type="button"
+                        title="Recordatorio"
+                        onClick={() => setIsReminderOpen(!isReminderOpen)}
+                        className={`px-4 py-2 rounded-full text-sm font-bold flex items-center gap-2 transition-colors ${
+                            reminderAt
+                                ? 'bg-primary/20 text-primary dark:text-purple-300'
+                                : 'bg-gray-100 dark:bg-white/5 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-white/10'
+                        }`}
+                    >
+                        <span>🔔</span>
+                        {reminderAt ? formatScheduledReminder(reminderAt) : 'Recordarme'}
+                    </button>
+                    {isReminderOpen && (
+                        <div className="absolute top-full left-0 mt-2 bg-white dark:bg-[#1a1a24] border border-gray-200 dark:border-white/10 rounded-2xl shadow-xl z-[60] overflow-hidden w-[280px] p-4 flex flex-col gap-3">
+                            <span className="text-xs font-black uppercase text-text-secondary tracking-wider">Programar recordatorio</span>
+                            <input 
+                                type="datetime-local"
+                                value={reminderInput || formatReminderInput(reminderAt)}
+                                onChange={(e) => setReminderInput(e.target.value)}
+                                className="bg-gray-100 dark:bg-surface text-text-primary px-3 py-2.5 rounded-xl text-sm font-bold border border-gray-200 dark:border-white/10 focus:outline-none focus:ring-2 focus:ring-primary/20"
+                            />
+                            <div className="flex flex-col gap-1.5">
+                                {quickReminderOptions.map((q) => (
+                                    <button
+                                        key={q.label}
+                                        type="button"
+                                        onClick={() => applyReminderTime(q.compute())}
+                                        className="w-full text-left px-3 py-2 text-xs font-bold rounded-xl hover:bg-gray-100 dark:hover:bg-white/10 text-text-primary flex items-center gap-2 transition-colors"
+                                    >
+                                        <span>⚡</span>
+                                        {q.label}
+                                    </button>
+                                ))}
+                            </div>
+                            <button 
+                                type="button"
+                                onClick={handleSaveReminderInput}
+                                className="w-full px-3 py-2.5 text-sm font-bold rounded-xl text-white bg-gradient-to-r from-[#A04AF9] to-[#C33FFF] hover:from-[#8f41e5] hover:to-[#b43aeb] shadow-[0_0_15px_rgba(160,74,249,0.3)] transition-all active:scale-[0.98]"
+                            >
+                                Listo
+                            </button>
+                            {reminderAt !== undefined && (
+                                <button 
+                                    type="button"
+                                    onClick={handleClearReminder}
+                                    className="w-full px-3 py-2 text-sm font-bold rounded-xl text-red-500 hover:bg-red-500/10 transition-colors"
+                                >
+                                    Quitar recordatorio
+                                </button>
+                            )}
+                            {reminderError && <p className="text-xs font-bold text-red-500">{reminderError}</p>}
                         </div>
                     )}
                 </div>

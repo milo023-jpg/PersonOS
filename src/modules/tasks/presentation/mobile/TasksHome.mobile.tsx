@@ -6,7 +6,10 @@ import { useTaskListsStore } from '../../application/store/taskListsStore';
 import { GENERAL_LIST_ID } from '../../domain/constants/defaults';
 import { useTasksMobileNavigation } from './MobileNavigationContext';
 import InlineTaskCreator from '../components/TaskList/InlineTaskCreator';
+import CreateListModal from '../components/TaskList/CreateListModal';
 import { isDueBeforeOrToday, toTaskDateTimestamp } from '../../domain/utils/taskDate';
+import { useReminderSync } from '../../../../shared/hooks/useReminderSync';
+import { buildTaskReminder } from '../../application/services/taskReminder';
 
 export default function TasksHomeMobile() {
     const { userId } = useAuthStore();
@@ -15,6 +18,7 @@ export default function TasksHomeMobile() {
     const { goToList } = useTasksMobileNavigation();
 
     const [isCreatorOpen, setIsCreatorOpen] = useState(false);
+    const [isListCreatorOpen, setIsListCreatorOpen] = useState(false);
 
     useEffect(() => {
         if (userId) {
@@ -22,6 +26,8 @@ export default function TasksHomeMobile() {
             fetchLists(userId);
         }
     }, [userId, fetchTasks, fetchLists]);
+
+    useReminderSync(tasks, buildTaskReminder, [tasks, userId]);
 
     const todayCount = tasks.filter(t => {
         if (t.status === 'completed') return false;
@@ -71,7 +77,16 @@ export default function TasksHomeMobile() {
 
             {/* Listas */}
             <div className="px-4 py-6 flex-1">
-                <h2 className="text-lg font-bold text-text-primary mb-4">Listas</h2>
+                <div className="flex items-center justify-between mb-4">
+                    <h2 className="text-lg font-bold text-text-primary">Listas</h2>
+                    <button
+                        onClick={() => setIsListCreatorOpen(true)}
+                        className="flex items-center gap-1.5 text-primary font-bold text-sm px-3 py-1.5 rounded-xl bg-primary/10 hover:bg-primary/20 transition-colors"
+                    >
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path></svg>
+                        Nueva Lista
+                    </button>
+                </div>
                 <div className="space-y-2">
                     {lists.map(list => {
                         const listTasksCount = tasks.filter(t => t.listId === list.id && t.status !== 'completed').length;
@@ -122,6 +137,11 @@ export default function TasksHomeMobile() {
                         <InlineTaskCreator defaultDate={Date.now()} onCancel={() => setIsCreatorOpen(false)} />
                     </div>
                 </div>
+            )}
+
+            {/* Modal de Creación de Lista */}
+            {isListCreatorOpen && (
+                <CreateListModal onClose={() => setIsListCreatorOpen(false)} />
             )}
         </motion.div>
     );

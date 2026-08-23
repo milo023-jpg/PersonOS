@@ -5,6 +5,7 @@ import { taskRepository } from '../../infrastructure/repositories/taskRepository
 import { dbService } from '../../../../services/dbService';
 import { normalizeTaskDocument, sanitizeSubtasks, type TaskDocument } from '../../../../scripts/normalizeTasks';
 import { logger } from '../../../../shared/utils/logger';
+import { cancelTaskReminder } from '../services/taskReminder';
 
 function normalizeTask(task: Task): Task {
     return {
@@ -140,6 +141,13 @@ export const useTasksStore = create<TasksState>((set, get) => ({
         // Optimistic update
         const previousTasks = get().tasks;
         const currentTask = previousTasks.find((t) => t.id === taskId);
+
+        const reminderWasRemoved =
+            Object.prototype.hasOwnProperty.call(partial, 'reminderAt') && partial.reminderAt === undefined;
+        if (currentTask?.reminderAt !== undefined && (partial.status === 'completed' || reminderWasRemoved)) {
+            cancelTaskReminder(taskId).catch(() => {});
+        }
+
         const sanitizedPartial: Partial<Task> = {
             ...partial,
             ...(Object.prototype.hasOwnProperty.call(partial, 'subtasks')
@@ -200,6 +208,8 @@ export const useTasksStore = create<TasksState>((set, get) => ({
     },
 
     deleteTask: async (userId, taskId) => {
+        cancelTaskReminder(taskId).catch(() => {});
+
         const previousTasks = get().tasks;
         set((state) => ({
             tasks: state.tasks.filter(t => t.id !== taskId)
