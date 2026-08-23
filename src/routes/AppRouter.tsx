@@ -1,4 +1,4 @@
-import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import MainLayout from "../layout/MainLayout";
 import RouteFavicon from "../shared/RouteFavicon";
 import Dashboard from '../modules/dashboard/presentation/pages/Dashboard';
@@ -32,7 +32,8 @@ export default function AppRouter() {
                         </ProtectedRoute>
                     }
                 >
-                    <Route path="/" element={<Dashboard />} />
+                    <Route path="/" element={<Navigate to="/tasks" replace />} />
+                    <Route path="/dashboard" element={<Dashboard />} />
                     <Route path="/habits" element={<HabitsPage />} />
                     <Route path="/habits/:id" element={<HabitDetailsPage />} />
                     <Route path="/inbox" element={<InboxPage />} />
