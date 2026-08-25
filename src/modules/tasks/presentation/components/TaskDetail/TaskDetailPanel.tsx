@@ -149,7 +149,7 @@ export default function TaskDetailPanel({ task, onClose }: Props) {
         }
 
         if (permission !== 'granted') {
-            setReminderError('Permiso de notificaciones denegado. Actívalo en los ajustes del navegador.');
+            setReminderError('Las notificaciones están bloqueadas en este navegador. Actívalas desde los ajustes del sitio (p. ej. Chrome: haz clic en el candado junto a la URL y habilita "Notificaciones") y vuelve a intentarlo.');
             setIsReminderOpen(false);
             return;
         }

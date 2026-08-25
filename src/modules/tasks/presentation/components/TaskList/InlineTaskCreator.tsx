@@ -219,6 +219,8 @@ export default function InlineTaskCreator({ onCancel, defaultContextId, defaultL
                     if (payload) {
                         await localNotifications.scheduleReminder(payload);
                     }
+                } else {
+                    setReminderError('Las notificaciones están bloqueadas en este navegador. Actívalas desde los ajustes del sitio (p. ej. Chrome: haz clic en el candado junto a la URL y habilita "Notificaciones"). Se guardó la tarea, pero el recordatorio no se activará.');
                 }
             } else if (editTask?.reminderAt !== undefined) {
                 await cancelTaskReminder(editTask.id);

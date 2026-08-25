@@ -13,10 +13,11 @@ interface Props {
 
 type SortOption = 'created_desc' | 'created_asc' | 'due_asc' | 'due_desc';
 
-export default function AllTasksView(_props: Props) {
+export default function AllTasksView(props: Props) {
     const { tasks } = useTasksStore();
     const [isCreating, setIsCreating] = useState(false);
     const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
+    const [creationDate, setCreationDate] = useState(() => Date.now());
     
     // Filters
     const [filterStatus, setFilterStatus] = useState<TaskStatus | 'all'>('all');
@@ -86,7 +87,7 @@ export default function AllTasksView(_props: Props) {
     };
 
     return (
-        <SystemScrollArea className="w-full h-full flex flex-col p-6 max-w-5xl mx-auto gap-6">
+        <SystemScrollArea className="w-full h-full flex flex-col p-4 lg:p-6 max-w-5xl mx-auto gap-6">
             
             {/* Toolbar Filters */}
             <div className="flex flex-wrap gap-3 p-4 bg-surface rounded-2xl border border-gray-100 dark:border-white/5 shadow-sm shrink-0 items-center">
@@ -103,9 +104,9 @@ export default function AllTasksView(_props: Props) {
                     {isStatusOpen && (
                         <div className="absolute top-full left-0 mt-2 bg-white dark:bg-[#1a1a24] border border-gray-200 dark:border-white/10 rounded-2xl shadow-xl z-50 overflow-hidden w-48 p-1 flex flex-col gap-1">
                             <button onClick={() => { setFilterStatus('all'); setIsStatusOpen(false); }} className="w-full text-left px-3 py-2 text-sm font-bold rounded-xl hover:bg-gray-100 dark:hover:bg-white/10 text-text-primary">Todos los estados</button>
-                            <button onClick={() => { setFilterStatus('todo'); setIsStatusOpen(false); }} className="w-full text-left px-3 py-2 text-sm font-bold rounded-xl hover:bg-gray-100 dark:hover:bg-white/10 text-text-primary">O Por hacer</button>
-                            <button onClick={() => { setFilterStatus('in_progress'); setIsStatusOpen(false); }} className="w-full text-left px-3 py-2 text-sm font-bold rounded-xl hover:bg-gray-100 dark:hover:bg-white/10 text-blue-500">▶ En curso</button>
-                            <button onClick={() => { setFilterStatus('completed'); setIsStatusOpen(false); }} className="w-full text-left px-3 py-2 text-sm font-bold rounded-xl hover:bg-gray-100 dark:hover:bg-white/10 text-success">✓ Completadas</button>
+                            <button onClick={() => { setFilterStatus('todo'); setIsStatusOpen(false); }} className="w-full text-left px-3 py-2 text-sm font-bold rounded-xl hover:bg-gray-100 dark:hover:bg-white/10 text-text-primary flex items-center gap-2"><span className="w-2.5 h-2.5 rounded-full bg-current"></span>Por hacer</button>
+                            <button onClick={() => { setFilterStatus('in_progress'); setIsStatusOpen(false); }} className="w-full text-left px-3 py-2 text-sm font-bold rounded-xl hover:bg-gray-100 dark:hover:bg-white/10 text-blue-500 flex items-center gap-2"><span className="w-2.5 h-2.5 rounded-full bg-current"></span>En curso</button>
+                            <button onClick={() => { setFilterStatus('completed'); setIsStatusOpen(false); }} className="w-full text-left px-3 py-2 text-sm font-bold rounded-xl hover:bg-gray-100 dark:hover:bg-white/10 text-success flex items-center gap-2"><span className="w-2.5 h-2.5 rounded-full bg-current"></span>Completadas</button>
                         </div>
                     )}
                 </div>
@@ -122,10 +123,10 @@ export default function AllTasksView(_props: Props) {
                     {isPriorityOpen && (
                         <div className="absolute top-full left-0 mt-2 bg-white dark:bg-[#1a1a24] border border-gray-200 dark:border-white/10 rounded-2xl shadow-xl z-50 overflow-hidden w-48 p-1 flex flex-col gap-1">
                             <button onClick={() => { setFilterPriority('all'); setIsPriorityOpen(false); }} className="w-full text-left px-3 py-2 text-sm font-bold rounded-xl hover:bg-gray-100 dark:hover:bg-white/10 text-text-primary">Todas las prioridades</button>
-                            <button onClick={() => { setFilterPriority('urgent'); setIsPriorityOpen(false); }} className="w-full text-left px-3 py-2 text-sm font-bold rounded-xl hover:bg-gray-100 dark:hover:bg-white/10 text-red-500">! Urgente</button>
-                            <button onClick={() => { setFilterPriority('high'); setIsPriorityOpen(false); }} className="w-full text-left px-3 py-2 text-sm font-bold rounded-xl hover:bg-gray-100 dark:hover:bg-white/10 text-orange-500">! Alta</button>
-                            <button onClick={() => { setFilterPriority('medium'); setIsPriorityOpen(false); }} className="w-full text-left px-3 py-2 text-sm font-bold rounded-xl hover:bg-gray-100 dark:hover:bg-white/10 text-blue-400">! Media</button>
-                            <button onClick={() => { setFilterPriority('low'); setIsPriorityOpen(false); }} className="w-full text-left px-3 py-2 text-sm font-bold rounded-xl hover:bg-gray-100 dark:hover:bg-white/10 text-gray-400">! Baja</button>
+                            <button onClick={() => { setFilterPriority('urgent'); setIsPriorityOpen(false); }} className="w-full text-left px-3 py-2 text-sm font-bold rounded-xl hover:bg-gray-100 dark:hover:bg-white/10 text-red-500 flex items-center gap-2"><span className="w-2.5 h-2.5 rounded-full bg-current"></span>Urgente</button>
+                            <button onClick={() => { setFilterPriority('high'); setIsPriorityOpen(false); }} className="w-full text-left px-3 py-2 text-sm font-bold rounded-xl hover:bg-gray-100 dark:hover:bg-white/10 text-orange-500 flex items-center gap-2"><span className="w-2.5 h-2.5 rounded-full bg-current"></span>Alta</button>
+                            <button onClick={() => { setFilterPriority('medium'); setIsPriorityOpen(false); }} className="w-full text-left px-3 py-2 text-sm font-bold rounded-xl hover:bg-gray-100 dark:hover:bg-white/10 text-blue-400 flex items-center gap-2"><span className="w-2.5 h-2.5 rounded-full bg-current"></span>Media</button>
+                            <button onClick={() => { setFilterPriority('low'); setIsPriorityOpen(false); }} className="w-full text-left px-3 py-2 text-sm font-bold rounded-xl hover:bg-gray-100 dark:hover:bg-white/10 text-gray-400 flex items-center gap-2"><span className="w-2.5 h-2.5 rounded-full bg-current"></span>Baja</button>
                         </div>
                     )}
                 </div>
@@ -154,7 +155,7 @@ export default function AllTasksView(_props: Props) {
                     )}
                 </div>
                 
-                <div className="ml-auto flex items-center text-sm font-bold text-text-secondary pr-2 bg-gray-50 dark:bg-background px-3 py-1.5 rounded-lg border border-gray-100 dark:border-white/5">
+                <div className="ml-auto flex items-center text-sm font-bold text-text-secondary bg-gray-50 dark:bg-background px-3 py-1.5 rounded-lg border border-gray-100 dark:border-white/5">
                     {filteredAndSorted.length} Resultados
                 </div>
             </div>
@@ -168,7 +169,7 @@ export default function AllTasksView(_props: Props) {
                                 <InlineTaskCreator editTask={t} onCancel={() => setEditingTaskId(null)} />
                             </div>
                         ) : (
-                            <TaskItem key={t.id} task={t} onSelect={() => setEditingTaskId(t.id)} />
+                            <TaskItem key={t.id} task={t} onSelect={(task) => { setEditingTaskId(task.id); props.onSelectTask(task); }} />
                         )
                     ))}
                     
@@ -186,7 +187,7 @@ export default function AllTasksView(_props: Props) {
                                 <InlineTaskCreator editTask={t} onCancel={() => setEditingTaskId(null)} />
                             </div>
                         ) : (
-                            <TaskItem key={t.id} task={t} onSelect={() => setEditingTaskId(t.id)} />
+                            <TaskItem key={t.id} task={t} onSelect={(task) => { setEditingTaskId(task.id); props.onSelectTask(task); }} />
                         )
                     ))}
                 </AnimatePresence>
@@ -200,11 +201,11 @@ export default function AllTasksView(_props: Props) {
                     {isCreating ? (
                         <InlineTaskCreator 
                             onCancel={() => setIsCreating(false)} 
-                            defaultDate={Date.now()}
+                            defaultDate={creationDate}
                         />
                     ) : (
                         <button 
-                            onClick={() => setIsCreating(true)}
+                            onClick={() => { setCreationDate(Date.now()); setIsCreating(true); }}
                             className="w-full text-left py-4 px-4 rounded-xl text-text-secondary hover:text-primary font-bold transition-all flex items-center justify-center gap-2 border-2 border-dashed border-gray-200 dark:border-gray-800 hover:border-primary/30 hover:bg-primary/5 group"
                         >
                             <svg className="w-5 h-5 text-primary opacity-70 group-hover:opacity-100 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path></svg>

@@ -19,6 +19,7 @@ export default function TasksHomeMobile() {
 
     const [isCreatorOpen, setIsCreatorOpen] = useState(false);
     const [isListCreatorOpen, setIsListCreatorOpen] = useState(false);
+    const [creatorDate, setCreatorDate] = useState(() => Date.now());
 
     useEffect(() => {
         if (userId) {
@@ -40,7 +41,7 @@ export default function TasksHomeMobile() {
     const smartViews = [
         { id: 'today', label: 'Hoy', icon: '⭐', count: todayCount },
         { id: 'all', label: 'Todas', icon: '📋', count: allCount },
-    ];
+    ] as const;
 
     return (
         <motion.div
@@ -50,11 +51,6 @@ export default function TasksHomeMobile() {
             exit={{ opacity: 0, x: 20 }}
             transition={{ duration: 0.3 }}
         >
-            {/* Header */}
-            <div className="px-4 py-6 border-b border-gray-200 dark:border-gray-800">
-                <h1 className="text-2xl font-black text-text-primary">Tareas</h1>
-            </div>
-
             {/* Smart Views */}
             <div className="px-4 py-6">
                 <h2 className="text-lg font-bold text-text-primary mb-4">Vistas inteligentes</h2>
@@ -62,7 +58,7 @@ export default function TasksHomeMobile() {
                     {smartViews.map(view => (
                         <button
                             key={view.id}
-                            onClick={() => goToList(view.id as any)}
+                            onClick={() => goToList(view.id)}
                             className="bg-surface border border-gray-200 dark:border-gray-700 rounded-2xl p-4 flex flex-col items-center gap-2 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
                         >
                             <span className="text-3xl">{view.icon}</span>
@@ -122,7 +118,10 @@ export default function TasksHomeMobile() {
 
             {/* Botón flotante */}
             <button
-                onClick={() => setIsCreatorOpen(true)}
+                onClick={() => {
+                    setCreatorDate(Date.now());
+                    setIsCreatorOpen(true);
+                }}
                 className="fixed bottom-6 right-6 bg-primary text-white rounded-full w-14 h-14 flex items-center justify-center shadow-lg hover:bg-primary/90 transition-colors"
             >
                 <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -132,9 +131,9 @@ export default function TasksHomeMobile() {
 
             {/* Modal de Creación */}
             {isCreatorOpen && (
-                <div className="absolute inset-0 z-50 flex items-start justify-center pt-24 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200" onClick={() => setIsCreatorOpen(false)}>
-                    <div className="w-full max-w-2xl px-4" onClick={e => e.stopPropagation()}>
-                        <InlineTaskCreator defaultDate={Date.now()} onCancel={() => setIsCreatorOpen(false)} />
+                <div className="fixed inset-0 z-50 flex items-start justify-center pt-24 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200" onClick={() => setIsCreatorOpen(false)}>
+                    <div className="w-full max-w-2xl px-4 pb-8 max-h-[75vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+                        <InlineTaskCreator defaultDate={creatorDate} onCancel={() => setIsCreatorOpen(false)} />
                     </div>
                 </div>
             )}

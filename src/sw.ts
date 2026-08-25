@@ -13,6 +13,10 @@ interface NotificationClickEvent {
     waitUntil(promise: Promise<unknown>): void;
 }
 
+interface ActivateEvent {
+    waitUntil(promise: Promise<unknown>): void;
+}
+
 interface NavigatedClient {
     focus(): Promise<unknown>;
 }
@@ -24,8 +28,11 @@ interface WindowClientLike {
 }
 
 interface SwScope {
+    skipWaiting(): void;
     addEventListener(type: 'notificationclick', listener: (event: NotificationClickEvent) => void): void;
+    addEventListener(type: 'activate', listener: (event: ActivateEvent) => void): void;
     clients: {
+        claim(): Promise<unknown>;
         matchAll(options: unknown): Promise<WindowClientLike[]>;
         openWindow(url: string): Promise<unknown>;
     };
@@ -35,6 +42,12 @@ cleanupOutdatedCaches();
 precacheAndRoute(self.__WB_MANIFEST);
 
 const sw = self as unknown as SwScope;
+
+sw.skipWaiting();
+
+sw.addEventListener('activate', (event) => {
+    event.waitUntil(sw.clients.claim());
+});
 
 sw.addEventListener('notificationclick', (event) => {
     event.notification.close();

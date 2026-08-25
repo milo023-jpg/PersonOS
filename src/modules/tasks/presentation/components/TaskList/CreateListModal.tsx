@@ -54,7 +54,7 @@ export default function CreateListModal({ onClose, onCreated }: Props) {
 
     return (
         <div
-            className="absolute inset-0 z-50 flex items-start justify-center pt-24 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200 px-4"
+            className="fixed inset-0 z-50 flex items-start justify-center pt-24 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200 px-4 pb-8 overflow-y-auto"
             onClick={onClose}
         >
             <div

@@ -16,6 +16,7 @@ export default function TodayView({ onSelectTask }: Props) {
     const [isCreating, setIsCreating] = useState(false);
     const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
     const [isOverdueExpanded, setIsOverdueExpanded] = useState(true);
+    const [creationDate, setCreationDate] = useState(() => Date.now());
     const handleEditSelect = (task: Task) => {
         setEditingTaskId(task.id);
         onSelectTask(task);
@@ -70,7 +71,7 @@ export default function TodayView({ onSelectTask }: Props) {
     return (
         <div className="w-full h-full flex flex-col overflow-hidden">
             {/* Móviles: scroll global en una columna */}
-            <SystemScrollArea className="lg:hidden w-full h-full flex flex-col p-6 max-w-3xl mx-auto gap-8">
+            <SystemScrollArea className="lg:hidden w-full h-full flex flex-col p-4 lg:p-6 max-w-3xl mx-auto gap-8">
                 {/* Atrasadas - Colapsable en móviles */}
                 {overdueTasks.length > 0 && (
                     <section className="w-full flex flex-col gap-4">
@@ -146,11 +147,11 @@ export default function TodayView({ onSelectTask }: Props) {
                         {isCreating ? (
                             <InlineTaskCreator 
                                 onCancel={() => setIsCreating(false)} 
-                                defaultDate={Date.now()}
+                                defaultDate={creationDate}
                             />
                         ) : (
                             <button 
-                                onClick={() => setIsCreating(true)}
+                                onClick={() => { setCreationDate(Date.now()); setIsCreating(true); }}
                                 className="w-full text-left py-3 px-4 mt-2 rounded-xl text-text-secondary hover:text-primary font-bold transition-all flex items-center gap-2 hover:bg-gray-50 dark:hover:bg-gray-800/50 group"
                             >
                                 <svg className="w-5 h-5 text-primary opacity-70 group-hover:opacity-100 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path></svg>
@@ -250,11 +251,11 @@ export default function TodayView({ onSelectTask }: Props) {
                             {isCreating ? (
                                 <InlineTaskCreator 
                                     onCancel={() => setIsCreating(false)} 
-                                    defaultDate={Date.now()}
+                                    defaultDate={creationDate}
                                 />
                             ) : (
                                 <button 
-                                    onClick={() => setIsCreating(true)}
+                                    onClick={() => { setCreationDate(Date.now()); setIsCreating(true); }}
                                     className="w-full text-left py-3 px-4 mt-2 rounded-xl text-text-secondary hover:text-primary font-bold transition-all flex items-center gap-2 hover:bg-gray-50 dark:hover:bg-gray-800/50 group"
                                 >
                                     <svg className="w-5 h-5 text-primary opacity-70 group-hover:opacity-100 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path></svg>
