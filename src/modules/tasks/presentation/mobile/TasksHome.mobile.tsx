@@ -92,10 +92,10 @@ export default function TasksHomeMobile() {
                                 onClick={() => goToList('list', list.id)}
                                 className="w-full bg-surface border border-gray-200 dark:border-gray-700 rounded-xl p-4 flex items-center justify-between hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
                             >
-                                <div className="flex items-center gap-3">
+                                <div className="flex items-center gap-3 min-w-0 flex-1">
                                     <div className={`w-4 h-4 rounded-full ${list.color}`}></div>
                                     <div className="flex items-center gap-2">
-                                        <span className="font-bold text-text-primary">{list.name}</span>
+                                        <span className="font-bold text-text-primary truncate">{list.name}</span>
                                         {list.id === GENERAL_LIST_ID}
                                     </div>
                                 </div>
@@ -131,8 +131,8 @@ export default function TasksHomeMobile() {
 
             {/* Modal de Creación */}
             {isCreatorOpen && (
-                <div className="fixed inset-0 z-50 flex items-start justify-center pt-24 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200" onClick={() => setIsCreatorOpen(false)}>
-                    <div className="w-full max-w-2xl px-4 pb-8 max-h-[75vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+                <div className="fixed inset-0 z-50 flex items-start justify-center pt-16 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200" onClick={() => setIsCreatorOpen(false)}>
+                    <div className="w-full max-w-2xl px-4 pb-8 max-h-full overflow-y-auto overscroll-contain" onClick={e => e.stopPropagation()}>
                         <InlineTaskCreator defaultDate={creatorDate} onCancel={() => setIsCreatorOpen(false)} />
                     </div>
                 </div>

@@ -34,6 +34,10 @@ export const localNotifications = {
         );
     },
 
+    permission(): NotificationPermission {
+        return Notification.permission;
+    },
+
     isPermissionGranted(): boolean {
         if (!this.isSupported()) return false;
         return Notification.permission === 'granted';

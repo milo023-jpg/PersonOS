@@ -120,7 +120,7 @@ export default function ListsView({ onSelectTask }: Props) {
                         placeholder="Nombre de la lista..."
                         className="w-full bg-transparent border-none focus:outline-none text-text-primary placeholder:text-gray-400 font-bold text-lg mb-4"
                     />
-                    <div className="flex items-center justify-between">
+                    <div className="flex flex-col sm:flex-row gap-4 items-stretch sm:items-center">
                         <div className="flex flex-col sm:flex-row gap-4 flex-1">
                             {/* Color Selector */}
                             <div className="flex flex-wrap gap-2 items-center flex-1">
@@ -138,7 +138,7 @@ export default function ListsView({ onSelectTask }: Props) {
                                 <select 
                                     value={newListDefaultContext}
                                     onChange={e => setNewListDefaultContext(e.target.value)}
-                                    className="bg-gray-50 dark:bg-background border border-gray-200 dark:border-transparent text-text-primary rounded-xl px-3 py-1.5 focus:border-primary outline-none text-sm w-48"
+                                    className="bg-gray-50 dark:bg-background border border-gray-200 dark:border-transparent text-text-primary rounded-xl px-3 py-1.5 focus:border-primary outline-none text-sm w-full sm:w-48"
                                 >
                                     <option value="">Sin contexto</option>
                                     {contexts.map(c => (
@@ -147,7 +147,7 @@ export default function ListsView({ onSelectTask }: Props) {
                                 </select>
                             )}
                         </div>
-                        <div className="flex items-center gap-3">
+                        <div className="flex items-center justify-end shrink-0 gap-3">
                             <button 
                                 type="button" 
                                 onClick={() => setIsCreatingList(false)}
@@ -225,15 +225,15 @@ export default function ListsView({ onSelectTask }: Props) {
                                     </div>
                                 ) : (
                                     <>
-                                        <div className="flex items-center gap-3">
+<div className="flex items-center gap-3 min-w-0 flex-1">
                                             <div className="w-8 h-8 rounded-xl flex items-center justify-center bg-gray-50 dark:bg-white/5">
                                                 <div className={`w-3.5 h-3.5 rounded-full ${list.color}`}></div>
                                             </div>
                                             <div className="flex items-center gap-2">
-                                                <h3 className="text-lg font-black text-text-primary tracking-tight">{list.name}</h3>
+                                                <h3 className="text-lg font-black text-text-primary tracking-tight truncate min-w-0">{list.name}</h3>
                                             </div>
                                         </div>
-                                        <div className="flex items-center gap-2">
+                                        <div className="flex items-center gap-2 shrink-0">
                                             <span className="text-sm font-bold text-text-secondary bg-gray-100 dark:bg-white/5 px-2 py-1 rounded-lg">
                                                 {listTasks.length}
                                             </span>

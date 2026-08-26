@@ -121,7 +121,7 @@ export default function AllTasksView(props: Props) {
                         {getPriorityLabel()}
                     </button>
                     {isPriorityOpen && (
-                        <div className="absolute top-full left-0 mt-2 bg-white dark:bg-[#1a1a24] border border-gray-200 dark:border-white/10 rounded-2xl shadow-xl z-50 overflow-hidden w-48 p-1 flex flex-col gap-1">
+                        <div className="absolute top-full right-0 mt-2 bg-white dark:bg-[#1a1a24] border border-gray-200 dark:border-white/10 rounded-2xl shadow-xl z-50 overflow-hidden w-48 p-1 flex flex-col gap-1">
                             <button onClick={() => { setFilterPriority('all'); setIsPriorityOpen(false); }} className="w-full text-left px-3 py-2 text-sm font-bold rounded-xl hover:bg-gray-100 dark:hover:bg-white/10 text-text-primary">Todas las prioridades</button>
                             <button onClick={() => { setFilterPriority('urgent'); setIsPriorityOpen(false); }} className="w-full text-left px-3 py-2 text-sm font-bold rounded-xl hover:bg-gray-100 dark:hover:bg-white/10 text-red-500 flex items-center gap-2"><span className="w-2.5 h-2.5 rounded-full bg-current"></span>Urgente</button>
                             <button onClick={() => { setFilterPriority('high'); setIsPriorityOpen(false); }} className="w-full text-left px-3 py-2 text-sm font-bold rounded-xl hover:bg-gray-100 dark:hover:bg-white/10 text-orange-500 flex items-center gap-2"><span className="w-2.5 h-2.5 rounded-full bg-current"></span>Alta</button>
@@ -143,7 +143,7 @@ export default function AllTasksView(props: Props) {
                         {getSortLabel()}
                     </button>
                     {isSortOpen && (
-                        <div className="absolute top-full left-0 mt-2 bg-white dark:bg-[#1a1a24] border border-gray-200 dark:border-white/10 rounded-2xl shadow-xl z-50 overflow-hidden w-56 p-1 flex flex-col gap-1">
+                        <div className="absolute top-full right-0 mt-2 bg-white dark:bg-[#1a1a24] border border-gray-200 dark:border-white/10 rounded-2xl shadow-xl z-50 overflow-hidden w-56 p-1 flex flex-col gap-1">
                             <span className="px-3 py-1 text-[10px] font-black uppercase text-text-secondary tracking-wider">Fecha de creación</span>
                             <button onClick={() => { setSortOrder('created_desc'); setIsSortOpen(false); }} className={`w-full text-left px-3 py-2 text-sm font-bold rounded-xl hover:bg-gray-100 dark:hover:bg-white/10 text-text-primary ${sortOrder === 'created_desc' ? 'bg-gray-50 dark:bg-white/5' : ''}`}>Más recientes primero</button>
                             <button onClick={() => { setSortOrder('created_asc'); setIsSortOpen(false); }} className={`w-full text-left px-3 py-2 text-sm font-bold rounded-xl hover:bg-gray-100 dark:hover:bg-white/10 text-text-primary ${sortOrder === 'created_asc' ? 'bg-gray-50 dark:bg-white/5' : ''}`}>Más antiguas primero</button>

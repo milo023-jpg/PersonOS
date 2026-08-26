@@ -90,6 +90,7 @@ export default function InlineTaskCreator({ onCancel, defaultContextId, defaultL
     const [reminderAt, setReminderAt] = useState<number | undefined>(editTask?.reminderAt);
     const [reminderInput, setReminderInput] = useState<string>(formatReminderInput(editTask?.reminderAt));
     const [reminderError, setReminderError] = useState<string | null>(null);
+    const [reminderPermission, setReminderPermission] = useState<NotificationPermission>(() => localNotifications.isSupported() ? Notification.permission : 'denied');
     
     // Selectors
     const [isListOpen, setIsListOpen] = useState(false);
@@ -144,6 +145,11 @@ export default function InlineTaskCreator({ onCancel, defaultContextId, defaultL
                 return;
             }
             scheduledAt = reminderAt;
+        }
+
+        if (reminderAt !== undefined && Notification.permission !== 'granted' && localNotifications.isSupported()) {
+            const p = await localNotifications.requestPermission();
+            setReminderPermission(p);
         }
 
         try {
@@ -205,11 +211,7 @@ export default function InlineTaskCreator({ onCancel, defaultContextId, defaultL
 
             // Sincronizar la notificación local
             if (scheduledAt !== undefined) {
-                let permission = Notification.permission;
-                if (permission !== 'granted') {
-                    permission = await localNotifications.requestPermission();
-                }
-                if (permission === 'granted') {
+                if (localNotifications.isSupported() && Notification.permission === 'granted') {
                     const payload = buildTaskReminder({
                         id: savedTaskId,
                         title: title.trim(),
@@ -286,6 +288,18 @@ export default function InlineTaskCreator({ onCancel, defaultContextId, defaultL
         setIsReminderOpen(false);
     };
 
+    const handleEnableNotifications = async () => {
+        if (!localNotifications.isSupported()) {
+            setReminderPermission('denied');
+            return;
+        }
+        const p = await localNotifications.requestPermission();
+        setReminderPermission(p);
+        if (p === 'denied') {
+            setReminderError('Las notificaciones están bloqueadas por el navegador. Actívalas tocando el candado junto a la URL (o Ajustes → Notificaciones del sitio) y eligiendo Permitir.');
+        }
+    };
+
     return (
         <div 
             ref={formRef as any}
@@ -323,14 +337,14 @@ export default function InlineTaskCreator({ onCancel, defaultContextId, defaultL
             />
 
             {/* Fila de botones tipo Pill */}
-            <div className="flex items-center gap-2 mb-6 overflow-visible pb-1 relative">
+            <div className="flex flex-wrap items-center gap-x-2 gap-y-2 mb-6 overflow-visible pb-1 relative">
                 
                 {/* 1. Fecha Custom */}
                 <div className="relative shrink-0">
                     <button 
                         type="button" 
                         onClick={() => setIsDateOpen(!isDateOpen)}
-                        className={`px-4 py-2 rounded-full text-sm font-bold flex items-center gap-2 transition-colors ${dueDate ? 'bg-primary/20 text-primary dark:text-purple-300' : 'bg-gray-100 dark:bg-white/5 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-white/10'}`}
+                        className={`px-3 sm:px-4 py-2 rounded-full text-sm font-bold flex items-center gap-2 transition-colors ${dueDate ? 'bg-primary/20 text-primary dark:text-purple-300' : 'bg-gray-100 dark:bg-white/5 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-white/10'}`}
                     >
                         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
                         {getDateText()}
@@ -351,19 +365,19 @@ export default function InlineTaskCreator({ onCancel, defaultContextId, defaultL
                             type="button" 
                             title="Hora de vencimiento"
                             onClick={() => setIsTimeOpen(!isTimeOpen)}
-                            className={`px-4 py-2 rounded-full text-sm font-bold flex items-center gap-2 transition-colors outline-none focus:outline-none cursor-pointer ${dueTime ? 'bg-primary/20 text-primary dark:text-purple-300' : 'bg-gray-100 dark:bg-white/5 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-white/10'}`}
+                            className={`px-3 sm:px-4 py-2 rounded-full text-sm font-bold flex items-center gap-2 transition-colors outline-none focus:outline-none cursor-pointer ${dueTime ? 'bg-primary/20 text-primary dark:text-purple-300' : 'bg-gray-100 dark:bg-white/5 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-white/10'}`}
                         >
                             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
                             {dueTime || 'Sin hora'}
                         </button>
                         {isTimeOpen && (
-                            <div className="absolute top-full left-0 mt-2 bg-white dark:bg-[#1a1a24] border border-gray-200 dark:border-white/10 rounded-2xl shadow-xl z-[60] overflow-hidden w-auto p-3 flex flex-col gap-2">
+                            <div className="absolute top-full right-0 mt-2 bg-white dark:bg-[#1a1a24] border border-gray-200 dark:border-white/10 rounded-2xl shadow-xl z-[60] overflow-hidden w-auto max-w-[calc(100vw-2rem)] p-3 flex flex-col gap-2">
                                 <span className="text-xs font-bold text-text-secondary w-max">Asignar hora (Opcional)</span>
                                 <input 
                                     type="time" 
                                     value={dueTime}
                                     onChange={(e) => setDueTime(e.target.value)}
-                                    className="bg-gray-100 dark:bg-surface text-text-primary px-3 py-2 rounded-xl font-bold outline-none focus:ring-2 focus:ring-primary/20"
+                                    className="bg-gray-100 dark:bg-surface text-text-primary px-3 py-2 rounded-xl font-bold outline-none focus:ring-2 focus:ring-primary/20 w-full"
                                 />
                             </div>
                         )}
@@ -375,7 +389,7 @@ export default function InlineTaskCreator({ onCancel, defaultContextId, defaultL
                     <button 
                         type="button"
                         onClick={() => setIsPriorityOpen(!isPriorityOpen)}
-                        className={`px-4 py-2 rounded-full text-sm font-bold flex items-center gap-2 transition-colors ${priority !== 'medium' ? 'bg-white/10 text-white' : 'bg-gray-100 dark:bg-white/5 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-white/10'}`}
+                        className={`px-3 sm:px-4 py-2 rounded-full text-sm font-bold flex items-center gap-2 transition-colors ${priority !== 'medium' ? 'bg-white/10 text-white' : 'bg-gray-100 dark:bg-white/5 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-white/10'}`}
                     >
                         <span className={`flex items-center justify-center font-black ${priorities.find(p => p.value === priority)?.color}`}>
                             !
@@ -384,7 +398,7 @@ export default function InlineTaskCreator({ onCancel, defaultContextId, defaultL
                     </button>
 
                     {isPriorityOpen && (
-                        <div className="absolute top-full left-0 mt-2 bg-white dark:bg-[#1a1a24] border border-gray-200 dark:border-white/10 rounded-2xl shadow-xl z-[60] overflow-hidden w-40 p-1 flex flex-col gap-1">
+                        <div className="absolute top-full right-0 mt-2 bg-white dark:bg-[#1a1a24] border border-gray-200 dark:border-white/10 rounded-2xl shadow-xl z-[60] overflow-hidden w-40 p-1 flex flex-col gap-1">
                             {priorities.map(p => (
                                 <button
                                     key={p.value}
@@ -408,8 +422,15 @@ export default function InlineTaskCreator({ onCancel, defaultContextId, defaultL
                     <button 
                         type="button"
                         title="Recordatorio"
-                        onClick={() => setIsReminderOpen(!isReminderOpen)}
-                        className={`px-4 py-2 rounded-full text-sm font-bold flex items-center gap-2 transition-colors ${
+                        onClick={async () => {
+                            setReminderError(null);
+                            if (reminderPermission === 'default') {
+                                const p = await localNotifications.requestPermission();
+                                setReminderPermission(p);
+                            }
+                            setIsReminderOpen(!isReminderOpen);
+                        }}
+                        className={`px-3 sm:px-4 py-2 rounded-full text-sm font-bold flex items-center gap-2 transition-colors ${
                             reminderAt
                                 ? 'bg-primary/20 text-primary dark:text-purple-300'
                                 : 'bg-gray-100 dark:bg-white/5 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-white/10'
@@ -419,43 +440,73 @@ export default function InlineTaskCreator({ onCancel, defaultContextId, defaultL
                         {reminderAt ? formatScheduledReminder(reminderAt) : 'Recordarme'}
                     </button>
                     {isReminderOpen && (
-                        <div className="absolute top-full left-0 mt-2 bg-white dark:bg-[#1a1a24] border border-gray-200 dark:border-white/10 rounded-2xl shadow-xl z-[60] overflow-hidden w-[280px] p-4 flex flex-col gap-3">
-                            <span className="text-xs font-black uppercase text-text-secondary tracking-wider">Programar recordatorio</span>
-                            <input 
-                                type="datetime-local"
-                                value={reminderInput || formatReminderInput(reminderAt)}
-                                onChange={(e) => setReminderInput(e.target.value)}
-                                className="bg-gray-100 dark:bg-surface text-text-primary px-3 py-2.5 rounded-xl text-sm font-bold border border-gray-200 dark:border-white/10 focus:outline-none focus:ring-2 focus:ring-primary/20"
-                            />
-                            <div className="flex flex-col gap-1.5">
-                                {quickReminderOptions.map((q) => (
-                                    <button
-                                        key={q.label}
+                        <div className="absolute top-full right-0 mt-2 bg-white dark:bg-[#1a1a24] border border-gray-200 dark:border-white/10 rounded-2xl shadow-xl z-[60] overflow-hidden w-[280px] max-w-[calc(100vw-2rem)] p-4 flex flex-col gap-3">
+                            {reminderPermission === 'granted' && (
+                                <>
+                                    <span className="text-xs font-black uppercase text-text-secondary tracking-wider">Programar recordatorio</span>
+                                    <input 
+                                        type="datetime-local"
+                                        value={reminderInput || formatReminderInput(reminderAt)}
+                                        onChange={(e) => setReminderInput(e.target.value)}
+                                        className="bg-gray-100 dark:bg-surface text-text-primary px-3 py-2.5 rounded-xl text-sm font-bold border border-gray-200 dark:border-white/10 focus:outline-none focus:ring-2 focus:ring-primary/20 w-full"
+                                    />
+                                    <div className="flex flex-col gap-1.5">
+                                        {quickReminderOptions.map((q) => (
+                                            <button
+                                                key={q.label}
+                                                type="button"
+                                                onClick={() => applyReminderTime(q.compute())}
+                                                className="w-full text-left px-3 py-2 text-xs font-bold rounded-xl hover:bg-gray-100 dark:hover:bg-white/10 text-text-primary flex items-center gap-2 transition-colors"
+                                            >
+                                                <span>⚡</span>
+                                                {q.label}
+                                            </button>
+                                        ))}
+                                    </div>
+                                    <button 
                                         type="button"
-                                        onClick={() => applyReminderTime(q.compute())}
-                                        className="w-full text-left px-3 py-2 text-xs font-bold rounded-xl hover:bg-gray-100 dark:hover:bg-white/10 text-text-primary flex items-center gap-2 transition-colors"
+                                        onClick={handleSaveReminderInput}
+                                        className="w-full px-3 py-2.5 text-sm font-bold rounded-xl text-white bg-gradient-to-r from-[#A04AF9] to-[#C33FFF] hover:from-[#8f41e5] hover:to-[#b43aeb] shadow-[0_0_15px_rgba(160,74,249,0.3)] transition-all active:scale-[0.98]"
                                     >
-                                        <span>⚡</span>
-                                        {q.label}
+                                        Listo
                                     </button>
-                                ))}
-                            </div>
-                            <button 
-                                type="button"
-                                onClick={handleSaveReminderInput}
-                                className="w-full px-3 py-2.5 text-sm font-bold rounded-xl text-white bg-gradient-to-r from-[#A04AF9] to-[#C33FFF] hover:from-[#8f41e5] hover:to-[#b43aeb] shadow-[0_0_15px_rgba(160,74,249,0.3)] transition-all active:scale-[0.98]"
-                            >
-                                Listo
-                            </button>
-                            {reminderAt !== undefined && (
-                                <button 
-                                    type="button"
-                                    onClick={handleClearReminder}
-                                    className="w-full px-3 py-2 text-sm font-bold rounded-xl text-red-500 hover:bg-red-500/10 transition-colors"
-                                >
-                                    Quitar recordatorio
-                                </button>
+                                    {reminderAt !== undefined && (
+                                        <button 
+                                            type="button"
+                                            onClick={handleClearReminder}
+                                            className="w-full px-3 py-2 text-sm font-bold rounded-xl text-red-500 hover:bg-red-500/10 transition-colors"
+                                        >
+                                            Quitar recordatorio
+                                        </button>
+                                    )}
+                                </>
                             )}
+
+                            {reminderPermission === 'default' && (
+                                <>
+                                    <span className="text-xs font-black uppercase text-text-secondary tracking-wider">Activa las notificaciones</span>
+                                    <p className="text-sm font-medium text-text-primary">
+                                        Para programar recordatorios necesitas permitir notificaciones en este dispositivo.
+                                    </p>
+                                    <button 
+                                        type="button"
+                                        onClick={() => { void handleEnableNotifications(); }}
+                                        className="w-full px-3 py-2.5 text-sm font-bold rounded-xl text-white bg-gradient-to-r from-[#A04AF9] to-[#C33FFF] hover:from-[#8f41e5] hover:to-[#b43aeb] shadow-[0_0_15px_rgba(160,74,249,0.3)] transition-all active:scale-[0.98]"
+                                    >
+                                        Activar notificaciones
+                                    </button>
+                                </>
+                            )}
+
+                            {reminderPermission === 'denied' && (
+                                <>
+                                    <span className="text-xs font-black uppercase text-text-secondary tracking-wider">Notificaciones bloqueadas</span>
+                                    <p className="text-sm font-medium text-text-primary">
+                                        Las notificaciones están bloqueadas por el navegador. Actívalas tocando el candado junto a la URL (o Ajustes → Notificaciones del sitio) y eligiendo Permitir.
+                                    </p>
+                                </>
+                            )}
+
                             {reminderError && <p className="text-xs font-bold text-red-500">{reminderError}</p>}
                         </div>
                     )}
@@ -486,7 +537,7 @@ export default function InlineTaskCreator({ onCancel, defaultContextId, defaultL
                             )}
                         </button>
                         {isListOpen && (
-                            <div className="absolute bottom-full left-0 mb-2 bg-white dark:bg-[#1a1a24] border border-gray-200 dark:border-white/10 rounded-2xl shadow-xl z-[60] overflow-hidden w-56 max-h-64 overflow-y-auto system-scroll p-1 flex flex-col gap-1">
+                            <div className="absolute bottom-full right-0 mb-2 bg-white dark:bg-[#1a1a24] border border-gray-200 dark:border-white/10 rounded-2xl shadow-xl z-[60] overflow-hidden w-56 max-w-[calc(100vw-2rem)] max-h-64 overflow-y-auto system-scroll p-1 flex flex-col gap-1">
                                 <button
                                     type="button"
                                     onClick={() => {
@@ -538,7 +589,7 @@ export default function InlineTaskCreator({ onCancel, defaultContextId, defaultL
                             )}
                         </button>
                         {isContextOpen && (
-                            <div className="absolute bottom-full left-0 mb-2 bg-white dark:bg-[#1a1a24] border border-gray-200 dark:border-white/10 rounded-2xl shadow-xl z-[60] overflow-hidden w-56 max-h-64 overflow-y-auto system-scroll p-1 flex flex-col gap-1">
+                            <div className="absolute bottom-full right-0 mb-2 bg-white dark:bg-[#1a1a24] border border-gray-200 dark:border-white/10 rounded-2xl shadow-xl z-[60] overflow-hidden w-56 max-w-[calc(100vw-2rem)] max-h-64 overflow-y-auto system-scroll p-1 flex flex-col gap-1">
                                 <button
                                     type="button"
                                     onClick={() => {
@@ -569,7 +620,7 @@ export default function InlineTaskCreator({ onCancel, defaultContextId, defaultL
                     </div>
                 </div>
 
-                <div className="flex items-center gap-2">
+                <div className="flex flex-wrap justify-end items-center gap-2">
                     <button 
                         type="button"
                         onClick={onCancel}
@@ -582,7 +633,7 @@ export default function InlineTaskCreator({ onCancel, defaultContextId, defaultL
                         type="button"
                         onClick={handleAdd}
                         disabled={!title.trim() || isLoading}
-                        className="px-6 py-2 text-sm font-bold text-white rounded-full 
+                        className="px-5 py-2 text-sm font-bold text-white rounded-full 
                                    bg-gradient-to-r from-[#A04AF9] to-[#C33FFF] hover:from-[#8f41e5] hover:to-[#b43aeb]
                                    shadow-[0_0_15px_rgba(160,74,249,0.4)] disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-none
                                    transition-all active:scale-95 flex items-center gap-2"

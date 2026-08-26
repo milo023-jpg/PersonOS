@@ -55,7 +55,7 @@ export default function DatePickerPopover({ value, onChange, onClose }: Props) {
     const days = Array.from({ length: daysInMonth }, (_, i) => i + 1);
 
     return (
-        <div ref={ref} className="absolute top-full left-0 mt-2 bg-white dark:bg-[#1a1a24] border border-gray-200 dark:border-white/10 rounded-2xl shadow-2xl z-50 overflow-hidden w-[280px] p-4 select-none">
+        <div ref={ref} className="absolute top-full left-0 mt-2 bg-white dark:bg-[#1a1a24] border border-gray-200 dark:border-white/10 rounded-2xl shadow-2xl z-50 overflow-hidden w-[280px] max-w-[calc(100vw-2rem)] p-4 select-none">
             {/* Header */}
             <div className="flex justify-between items-center mb-4">
                 <span className="font-bold text-text-primary">

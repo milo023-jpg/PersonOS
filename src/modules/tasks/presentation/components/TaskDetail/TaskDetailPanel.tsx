@@ -57,6 +57,7 @@ export default function TaskDetailPanel({ task, onClose }: Props) {
     const [isReminderOpen, setIsReminderOpen] = useState(false);
     const [reminderInput, setReminderInput] = useState('');
     const [reminderError, setReminderError] = useState<string | null>(null);
+    const [notificationPermission, setNotificationPermission] = useState<NotificationPermission | 'unsupported'>(() => localNotifications.isSupported() ? Notification.permission : 'unsupported');
 
     const statusRef = useRef<HTMLDivElement>(null);
     const priorityRef = useRef<HTMLDivElement>(null);
@@ -184,6 +185,18 @@ export default function TaskDetailPanel({ task, onClose }: Props) {
         setIsReminderOpen(false);
     };
 
+    const handleEnableNotifications = async () => {
+        if (!localNotifications.isSupported()) {
+            setNotificationPermission('unsupported');
+            return;
+        }
+        const p = await localNotifications.requestPermission();
+        setNotificationPermission(p);
+        if (p === 'denied') {
+            setReminderError('Las notificaciones están bloqueadas por el navegador. Actívalas tocando el candado junto a la URL (o Ajustes → Notificaciones del sitio) y eligiendo Permitir.');
+        }
+    };
+
     return (
         <AnimatePresence>
             <motion.div 
@@ -204,14 +217,14 @@ export default function TaskDetailPanel({ task, onClose }: Props) {
                     {/* Header */}
                     <div className="flex items-center justify-between p-4 border-b border-gray-200 dark:border-gray-800 shrink-0">
                         <div className="flex items-center gap-2">
-                            <span className="text-xs font-black uppercase tracking-wider text-text-secondary bg-gray-100 dark:bg-background px-3 py-1.5 rounded-lg">
+                            <span className="text-xs font-black uppercase tracking-wider text-text-secondary bg-gray-100 dark:bg-background px-3 py-1.5 rounded-lg truncate">
                                 Tarea: {task.id.slice(0,6)}
                             </span>
                         </div>
                         <div className="flex items-center gap-2">
                             <button 
                                 onClick={() => userId && moveTaskStatus(userId, task.id, task.status === 'completed' ? 'todo' : 'completed')}
-                                className="text-sm font-bold px-4 py-1.5 rounded-lg border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-background transition-colors flex items-center gap-2 text-text-primary"
+                                className="text-sm font-bold px-4 py-1.5 rounded-lg border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-background transition-colors flex items-center gap-2 text-text-primary shrink-0"
                             >
                                 {task.status === 'completed' ? 'Desmarcar' : '✓ Completar'}
                             </button>
@@ -245,7 +258,7 @@ export default function TaskDetailPanel({ task, onClose }: Props) {
                                     {currentStatus?.label || 'Estado'}
                                 </button>
                                 {isStatusOpen && (
-                                    <div className="absolute top-full left-0 mt-2 bg-white dark:bg-[#1a1a24] border border-gray-200 dark:border-white/10 rounded-2xl shadow-xl z-50 overflow-hidden w-48 p-1 flex flex-col gap-1">
+                                    <div className="absolute top-full left-0 mt-2 bg-white dark:bg-[#1a1a24] border border-gray-200 dark:border-white/10 rounded-2xl shadow-xl z-50 overflow-hidden w-48 max-w-[calc(100vw-2rem)] p-1 flex flex-col gap-1">
                                         {statuses.map(s => (
                                             <button 
                                                 key={s.value}
@@ -270,7 +283,7 @@ export default function TaskDetailPanel({ task, onClose }: Props) {
                                     {currentPriority?.label || 'Prioridad'}
                                 </button>
                                 {isPriorityOpen && (
-                                    <div className="absolute top-full left-0 mt-2 bg-white dark:bg-[#1a1a24] border border-gray-200 dark:border-white/10 rounded-2xl shadow-xl z-50 overflow-hidden w-48 p-1 flex flex-col gap-1">
+                                    <div className="absolute top-full right-0 mt-2 bg-white dark:bg-[#1a1a24] border border-gray-200 dark:border-white/10 rounded-2xl shadow-xl z-50 overflow-hidden w-48 max-w-[calc(100vw-2rem)] p-1 flex flex-col gap-1">
                                         {priorities.map(p => (
                                             <button 
                                                 key={p.value}
@@ -296,7 +309,7 @@ export default function TaskDetailPanel({ task, onClose }: Props) {
                                     type="date" 
                                     value={formatDateForInput(task.dueDate)}
                                     onChange={(e) => handleDateChange(e.target.value)}
-                                    className="bg-white dark:bg-surface px-4 py-2.5 rounded-xl text-sm font-bold text-text-primary border border-gray-200 dark:border-white/10 focus:outline-none focus:ring-2 focus:ring-primary/20 shadow-sm transition-all"
+                                    className="bg-white dark:bg-surface px-4 py-2.5 rounded-xl text-sm font-bold text-text-primary border border-gray-200 dark:border-white/10 focus:outline-none focus:ring-2 focus:ring-primary/20 shadow-sm transition-all w-full sm:w-auto"
                                 />
                                 {task.dueDate && (
                                     <input 
@@ -304,7 +317,7 @@ export default function TaskDetailPanel({ task, onClose }: Props) {
                                         type="time" 
                                         value={dueTimeStr === '00:00' ? '' : dueTimeStr}
                                         onChange={(e) => handleTimeChange(e.target.value)}
-                                        className="bg-white dark:bg-surface px-4 py-2.5 rounded-xl text-sm font-bold text-text-primary border border-gray-200 dark:border-white/10 focus:outline-none focus:ring-2 focus:ring-primary/20 shadow-sm transition-all text-center w-[120px]"
+                                        className="bg-white dark:bg-surface px-4 py-2.5 rounded-xl text-sm font-bold text-text-primary border border-gray-200 dark:border-white/10 focus:outline-none focus:ring-2 focus:ring-primary/20 shadow-sm transition-all text-center w-full sm:w-[120px]"
                                     />
                                 )}
                             </div>
@@ -314,7 +327,14 @@ export default function TaskDetailPanel({ task, onClose }: Props) {
                                 <div ref={reminderRef} className="relative w-max">
                                     <button 
                                         type="button"
-                                        onClick={() => setIsReminderOpen(!isReminderOpen)}
+                                        onClick={async () => {
+                                            setReminderError(null);
+                                            if (notificationPermission === 'default') {
+                                                const p = await localNotifications.requestPermission();
+                                                setNotificationPermission(p);
+                                            }
+                                            setIsReminderOpen(!isReminderOpen);
+                                        }}
                                         className={`px-4 py-2.5 rounded-xl text-sm font-bold flex items-center gap-2 transition-colors ${
                                             task.reminderAt
                                                 ? 'bg-primary/20 text-primary dark:text-purple-300'
@@ -326,47 +346,86 @@ export default function TaskDetailPanel({ task, onClose }: Props) {
                                     </button>
 
                                     {isReminderOpen && (
-                                        <div className="absolute top-full left-0 mt-2 bg-white dark:bg-[#1a1a24] border border-gray-200 dark:border-white/10 rounded-2xl shadow-xl z-50 overflow-hidden w-[280px] p-4 flex flex-col gap-3">
-                                            <span className="text-xs font-black uppercase text-text-secondary tracking-wider">Programar recordatorio</span>
-                                            <input 
-                                                type="datetime-local"
-                                                value={reminderInput || formatReminderForInput(task.reminderAt)}
-                                                onChange={(e) => setReminderInput(e.target.value)}
-                                                className="bg-gray-100 dark:bg-surface text-text-primary px-3 py-2.5 rounded-xl text-sm font-bold border border-gray-200 dark:border-white/10 focus:outline-none focus:ring-2 focus:ring-primary/20"
-                                            />
-                                            <div className="flex flex-col gap-1.5">
-                                                {quickReminderOptions.map((q) => (
-                                                    <button
-                                                        key={q.label}
+                                        <div className="absolute top-full right-0 mt-2 bg-white dark:bg-[#1a1a24] border border-gray-200 dark:border-white/10 rounded-2xl shadow-xl z-50 overflow-hidden w-[280px] max-w-[calc(100vw-2rem)] p-4 flex flex-col gap-3">
+                                            {notificationPermission === 'granted' && (
+                                                <>
+                                                    <span className="text-xs font-black uppercase text-text-secondary tracking-wider">Programar recordatorio</span>
+                                                    <input 
+                                                        type="datetime-local"
+                                                        value={reminderInput || formatReminderForInput(task.reminderAt)}
+                                                        onChange={(e) => setReminderInput(e.target.value)}
+                                                        className="bg-gray-100 dark:bg-surface text-text-primary px-3 py-2.5 rounded-xl text-sm font-bold border border-gray-200 dark:border-white/10 focus:outline-none focus:ring-2 focus:ring-primary/20 w-full"
+                                                    />
+                                                    <div className="flex flex-col gap-1.5">
+                                                        {quickReminderOptions.map((q) => (
+                                                            <button
+                                                                key={q.label}
+                                                                type="button"
+                                                                onClick={() => {
+                                                                    const at = q.compute();
+                                                                    setReminderInput(formatReminderForInput(at));
+                                                                    void setReminderAt(at);
+                                                                }}
+                                                                className="w-full text-left px-3 py-2 text-xs font-bold rounded-xl hover:bg-gray-100 dark:hover:bg-white/10 text-text-primary flex items-center gap-2 transition-colors"
+                                                            >
+                                                                <span>⚡</span>
+                                                                {q.label}
+                                                            </button>
+                                                        ))}
+                                                    </div>
+                                                    <button 
                                                         type="button"
-                                                        onClick={() => {
-                                                            const at = q.compute();
-                                                            setReminderInput(formatReminderForInput(at));
-                                                            void setReminderAt(at);
-                                                        }}
-                                                        className="w-full text-left px-3 py-2 text-xs font-bold rounded-xl hover:bg-gray-100 dark:hover:bg-white/10 text-text-primary flex items-center gap-2 transition-colors"
+                                                        onClick={handleSaveReminder}
+                                                        className="w-full px-3 py-2.5 text-sm font-black text-white rounded-xl bg-gradient-to-r from-[#A04AF9] to-[#C33FFF] hover:from-[#8f41e5] hover:to-[#b43aeb] shadow-[0_0_15px_rgba(160,74,249,0.3)] transition-all active:scale-[0.98]"
                                                     >
-                                                        <span>⚡</span>
-                                                        {q.label}
+                                                        Programar
                                                     </button>
-                                                ))}
-                                            </div>
-                                            <button 
-                                                type="button"
-                                                onClick={handleSaveReminder}
-                                                className="w-full px-3 py-2.5 text-sm font-black text-white rounded-xl bg-gradient-to-r from-[#A04AF9] to-[#C33FFF] hover:from-[#8f41e5] hover:to-[#b43aeb] shadow-[0_0_15px_rgba(160,74,249,0.3)] transition-all active:scale-[0.98]"
-                                            >
-                                                Programar
-                                            </button>
-                                            {task.reminderAt && (
-                                                <button 
-                                                    type="button"
-                                                    onClick={() => { void handleRemoveReminder(); }}
-                                                    className="w-full px-3 py-2 text-sm font-bold rounded-xl text-red-500 hover:bg-red-500/10 transition-colors"
-                                                >
-                                                    Quitar recordatorio
-                                                </button>
+                                                    {task.reminderAt && (
+                                                        <button 
+                                                            type="button"
+                                                            onClick={() => { void handleRemoveReminder(); }}
+                                                            className="w-full px-3 py-2 text-sm font-bold rounded-xl text-red-500 hover:bg-red-500/10 transition-colors"
+                                                        >
+                                                            Quitar recordatorio
+                                                        </button>
+                                                    )}
+                                                </>
                                             )}
+
+                                            {notificationPermission === 'default' && (
+                                                <>
+                                                    <span className="text-xs font-black uppercase text-text-secondary tracking-wider">Activa las notificaciones</span>
+                                                    <p className="text-sm font-medium text-text-primary">
+                                                        Para programar recordatorios necesitas permitir notificaciones en este dispositivo.
+                                                    </p>
+                                                    <button 
+                                                        type="button"
+                                                        onClick={() => { void handleEnableNotifications(); }}
+                                                        className="w-full px-3 py-2.5 text-sm font-black text-white rounded-xl bg-gradient-to-r from-[#A04AF9] to-[#C33FFF] hover:from-[#8f41e5] hover:to-[#b43aeb] shadow-[0_0_15px_rgba(160,74,249,0.3)] transition-all active:scale-[0.98]"
+                                                    >
+                                                        Activar notificaciones
+                                                    </button>
+                                                </>
+                                            )}
+
+                                            {notificationPermission === 'denied' && (
+                                                <>
+                                                    <span className="text-xs font-black uppercase text-text-secondary tracking-wider">Notificaciones bloqueadas</span>
+                                                    <p className="text-sm font-medium text-text-primary">
+                                                        Las notificaciones están bloqueadas por el navegador. Actívalas tocando el candado junto a la URL (o Ajustes → Notificaciones del sitio) y eligiendo Permitir.
+                                                    </p>
+                                                </>
+                                            )}
+
+                                            {notificationPermission === 'unsupported' && (
+                                                <>
+                                                    <span className="text-xs font-black uppercase text-text-secondary tracking-wider">No disponible</span>
+                                                    <p className="text-sm font-medium text-text-primary">
+                                                        Las notificaciones programadas no son compatibles con este navegador.
+                                                    </p>
+                                                </>
+                                            )}
+
                                             {reminderError && (
                                                 <p className="text-xs font-bold text-red-500">{reminderError}</p>
                                             )}
