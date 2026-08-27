@@ -7,7 +7,7 @@ import { useTasksStore } from '../../../application/store/tasksStore';
 import { formatDateForInput, parseInputDateToTimestamp } from '../../../domain/utils/taskDate';
 import SubtaskList from '../Subtasks/SubtaskList';
 import { buildTaskReminder, cancelTaskReminder } from '../../../application/services/taskReminder';
-import { localNotifications } from '../../../../../services/localNotifications.service';
+import { notificationService, type NotificationPermissionStatus } from '../../../../../services/notifications/NotificationService';
 
 interface Props {
   task: Task | null;
@@ -57,7 +57,7 @@ export default function TaskDetailPanel({ task, onClose }: Props) {
     const [isReminderOpen, setIsReminderOpen] = useState(false);
     const [reminderInput, setReminderInput] = useState('');
     const [reminderError, setReminderError] = useState<string | null>(null);
-    const [notificationPermission, setNotificationPermission] = useState<NotificationPermission | 'unsupported'>(() => localNotifications.isSupported() ? Notification.permission : 'unsupported');
+    const [notificationPermission, setNotificationPermission] = useState<NotificationPermissionStatus>(() => notificationService.getPermission());
 
     const statusRef = useRef<HTMLDivElement>(null);
     const priorityRef = useRef<HTMLDivElement>(null);
@@ -139,14 +139,14 @@ export default function TaskDetailPanel({ task, onClose }: Props) {
         setReminderError(null);
         if (!userId) return;
 
-        if (!localNotifications.isSupported()) {
+        if (!notificationService.isAvailable()) {
             setReminderError('Las notificaciones programadas no están disponibles en este navegador.');
             return;
         }
 
-        let permission = Notification.permission;
+        let permission = notificationService.getPermission();
         if (permission !== 'granted') {
-            permission = await localNotifications.requestPermission();
+            permission = await notificationService.requestPermission();
         }
 
         if (permission !== 'granted') {
@@ -157,7 +157,11 @@ export default function TaskDetailPanel({ task, onClose }: Props) {
 
         const payload = buildTaskReminder({ ...task, reminderAt: at });
         if (payload) {
-            await localNotifications.scheduleReminder(payload);
+            const ok = await notificationService.schedule(payload);
+            if (!ok) {
+                setReminderError('No se pudo programar el recordatorio en este navegador.');
+                return;
+            }
         }
 
         await updateTask(userId, task.id, { reminderAt: at, reminderStatus: 'scheduled' });
@@ -186,11 +190,11 @@ export default function TaskDetailPanel({ task, onClose }: Props) {
     };
 
     const handleEnableNotifications = async () => {
-        if (!localNotifications.isSupported()) {
+        if (!notificationService.isAvailable()) {
             setNotificationPermission('unsupported');
             return;
         }
-        const p = await localNotifications.requestPermission();
+        const p = await notificationService.requestPermission();
         setNotificationPermission(p);
         if (p === 'denied') {
             setReminderError('Las notificaciones están bloqueadas por el navegador. Actívalas tocando el candado junto a la URL (o Ajustes → Notificaciones del sitio) y eligiendo Permitir.');
@@ -330,7 +334,7 @@ export default function TaskDetailPanel({ task, onClose }: Props) {
                                         onClick={async () => {
                                             setReminderError(null);
                                             if (notificationPermission === 'default') {
-                                                const p = await localNotifications.requestPermission();
+                                                const p = await notificationService.requestPermission();
                                                 setNotificationPermission(p);
                                             }
                                             setIsReminderOpen(!isReminderOpen);

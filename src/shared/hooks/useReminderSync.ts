@@ -1,5 +1,6 @@
 import { useEffect } from 'react';
-import { localNotifications, type ReminderPayload } from '../../services/localNotifications.service';
+import { notificationService } from '../../services/notifications/NotificationService';
+import type { ReminderPayload } from '../../services/notifications/types';
 
 export function useReminderSync<T>(
     items: T[],
@@ -7,7 +8,7 @@ export function useReminderSync<T>(
     deps: unknown[] = []
 ) {
     useEffect(() => {
-        if (!localNotifications.isSupported() || !localNotifications.isPermissionGranted()) return;
+        if (!notificationService.isAvailable() || notificationService.getPermission() !== 'granted') return;
 
         let cancelled = false;
         let inFlight = false;
@@ -22,20 +23,21 @@ export function useReminderSync<T>(
                     .map(buildPayload)
                     .filter((p): p is ReminderPayload => p !== null && p.at > now);
 
-                const existing = await localNotifications.getScheduledReminders();
+                const existing = await notificationService.getScheduled();
                 const existingByTag = new Map(existing.map((n) => [n.tag, n]));
                 const payloadByTag = new Map(payloads.map((p) => [p.tag, p]));
 
-                const toSchedule = payloads.filter((p) => !existingByTag.has(p.tag));
-                for (const p of toSchedule) {
+                // En móvil los timers del SW no sobreviven a un reinicio, así que
+                // re-programamos todos los pendientes (idempotente: no duplica).
+                for (const p of payloads) {
                     if (cancelled) return;
-                    await localNotifications.scheduleReminder(p);
+                    await notificationService.schedule(p);
                 }
 
                 for (const existingTag of existingByTag.keys()) {
                     if (cancelled) return;
                     if (!payloadByTag.has(existingTag)) {
-                        await localNotifications.cancelReminder(existingTag);
+                        await notificationService.cancel(existingTag);
                     }
                 }
             } finally {

@@ -1,9 +1,6 @@
 import type { Task } from '../../domain/models/Task';
-import {
-    buildTag,
-    localNotifications,
-    type ReminderPayload,
-} from '../../../../services/localNotifications.service';
+import { notificationService } from '../../../../services/notifications/NotificationService';
+import type { ReminderPayload } from '../../../../services/notifications/types';
 
 export function buildTaskReminder(task: Task): ReminderPayload | null {
     if (!task.reminderAt || task.reminderAt <= Date.now()) return null;
@@ -12,7 +9,7 @@ export function buildTaskReminder(task: Task): ReminderPayload | null {
     const truncatedTitle = task.title.length > 60 ? `${task.title.slice(0, 57)}...` : task.title;
 
     return {
-        tag: buildTag('task', task.id),
+        tag: notificationService.buildTag('task', task.id),
         title: `Recordatorio: ${truncatedTitle}`,
         body: 'Tienes una tarea pendiente',
         at: task.reminderAt,
@@ -21,5 +18,5 @@ export function buildTaskReminder(task: Task): ReminderPayload | null {
 }
 
 export function cancelTaskReminder(taskId: string): Promise<void> {
-    return localNotifications.cancelReminder(buildTag('task', taskId));
+    return notificationService.cancel(notificationService.buildTag('task', taskId));
 }

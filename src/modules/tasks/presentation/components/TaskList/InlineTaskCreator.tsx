@@ -8,7 +8,7 @@ import type { Task, TaskPriority, TaskStatus } from '../../../domain/models/Task
 import DatePickerPopover from './DatePickerPopover';
 import { logger } from '../../../../../shared/utils/logger';
 import { buildTaskReminder, cancelTaskReminder } from '../../../application/services/taskReminder';
-import { localNotifications } from '../../../../../services/localNotifications.service';
+import { notificationService, type NotificationPermissionStatus } from '../../../../../services/notifications/NotificationService';
 
 interface Props {
   onCancel: () => void;
@@ -90,7 +90,10 @@ export default function InlineTaskCreator({ onCancel, defaultContextId, defaultL
     const [reminderAt, setReminderAt] = useState<number | undefined>(editTask?.reminderAt);
     const [reminderInput, setReminderInput] = useState<string>(formatReminderInput(editTask?.reminderAt));
     const [reminderError, setReminderError] = useState<string | null>(null);
-    const [reminderPermission, setReminderPermission] = useState<NotificationPermission>(() => localNotifications.isSupported() ? Notification.permission : 'denied');
+    const [reminderPermission, setReminderPermission] = useState<NotificationPermissionStatus>(() => {
+        const p = notificationService.getPermission();
+        return p === 'unsupported' ? 'denied' : p;
+    });
     
     // Selectors
     const [isListOpen, setIsListOpen] = useState(false);
@@ -147,8 +150,8 @@ export default function InlineTaskCreator({ onCancel, defaultContextId, defaultL
             scheduledAt = reminderAt;
         }
 
-        if (reminderAt !== undefined && Notification.permission !== 'granted' && localNotifications.isSupported()) {
-            const p = await localNotifications.requestPermission();
+        if (reminderAt !== undefined && notificationService.getPermission() !== 'granted' && notificationService.isAvailable()) {
+            const p = await notificationService.requestPermission();
             setReminderPermission(p);
         }
 
@@ -211,7 +214,11 @@ export default function InlineTaskCreator({ onCancel, defaultContextId, defaultL
 
             // Sincronizar la notificación local
             if (scheduledAt !== undefined) {
-                if (localNotifications.isSupported() && Notification.permission === 'granted') {
+                if (!notificationService.isAvailable()) {
+                    setReminderError('Este dispositivo no puede mostrar notificaciones programadas. Se guardó la tarea, pero el recordatorio no se activará.');
+                } else if (notificationService.getPermission() !== 'granted') {
+                    setReminderError('PersonOS no tiene permiso para notificarte. Haz clic en el candado junto a la URL (o en "Permisos" del sitio) y habilita "Notificaciones". Tu tarea se guardó, pero el recordatorio no se disparará.');
+                } else {
                     const payload = buildTaskReminder({
                         id: savedTaskId,
                         title: title.trim(),
@@ -219,10 +226,11 @@ export default function InlineTaskCreator({ onCancel, defaultContextId, defaultL
                         reminderAt: scheduledAt,
                     } as Task);
                     if (payload) {
-                        await localNotifications.scheduleReminder(payload);
+                        const ok = await notificationService.schedule(payload);
+                        if (!ok) {
+                            setReminderError('No se pudo programar el recordatorio en este navegador. Tu tarea se guardó correctamente.');
+                        }
                     }
-                } else {
-                    setReminderError('Las notificaciones están bloqueadas en este navegador. Actívalas desde los ajustes del sitio (p. ej. Chrome: haz clic en el candado junto a la URL y habilita "Notificaciones"). Se guardó la tarea, pero el recordatorio no se activará.');
                 }
             } else if (editTask?.reminderAt !== undefined) {
                 await cancelTaskReminder(editTask.id);
@@ -289,11 +297,11 @@ export default function InlineTaskCreator({ onCancel, defaultContextId, defaultL
     };
 
     const handleEnableNotifications = async () => {
-        if (!localNotifications.isSupported()) {
+        if (!notificationService.isAvailable()) {
             setReminderPermission('denied');
             return;
         }
-        const p = await localNotifications.requestPermission();
+        const p = await notificationService.requestPermission();
         setReminderPermission(p);
         if (p === 'denied') {
             setReminderError('Las notificaciones están bloqueadas por el navegador. Actívalas tocando el candado junto a la URL (o Ajustes → Notificaciones del sitio) y eligiendo Permitir.');
@@ -425,7 +433,7 @@ export default function InlineTaskCreator({ onCancel, defaultContextId, defaultL
                         onClick={async () => {
                             setReminderError(null);
                             if (reminderPermission === 'default') {
-                                const p = await localNotifications.requestPermission();
+                                const p = await notificationService.requestPermission();
                                 setReminderPermission(p);
                             }
                             setIsReminderOpen(!isReminderOpen);
