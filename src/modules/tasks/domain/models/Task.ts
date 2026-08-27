@@ -8,6 +8,13 @@ export interface Subtask {
   createdAt: number;
 }
 
+// Recordatorio personalizado adicional (independiente de las notificaciones
+// automáticas generadas por la fecha límite).
+export interface CustomReminder {
+  id: string;
+  at: number;
+}
+
 export interface RecurrenceRule {
   type: 'daily' | 'weekly' | 'monthly';
   interval: number;
@@ -28,6 +35,10 @@ export interface Task {
 
   reminderAt?: number; // Timestamp del recordatorio local programado
   reminderStatus?: 'scheduled' | 'sent' | 'missed';
+
+  // Recordatorios personalizados adicionales (múltiples). Independientes de los
+  // automáticos generados por dueDate/scheduledDate.
+  customReminders?: CustomReminder[];
 
   createdAt: number;
   updatedAt: number;

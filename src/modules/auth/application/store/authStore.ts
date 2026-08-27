@@ -8,6 +8,7 @@ import {
   signOutUser,
   signUpWithEmailPassword,
 } from '../../infrastructure/auth.service';
+import { logger } from '../../../../shared/utils/logger';
 
 interface AuthState {
   userId: string | null;
@@ -56,6 +57,10 @@ let authUnsubscribe: (() => void) | null = null;
 
 function getFirebaseErrorMessage(error: unknown): string {
   if (typeof error !== 'object' || error === null || !('code' in error)) {
+    const message = error instanceof Error ? error.message : String(error);
+    if (message && message !== 'undefined') {
+      return message;
+    }
     return 'No se pudo completar la autenticacion. Intenta de nuevo.';
   }
 
@@ -69,9 +74,20 @@ function getFirebaseErrorMessage(error: unknown): string {
     'auth/popup-closed-by-user': 'Cerraste la ventana de Google antes de completar el acceso.',
     'auth/cancelled-popup-request': 'Se cancelo la solicitud de acceso con Google.',
     'auth/network-request-failed': 'Error de red. Revisa tu conexion e intenta nuevamente.',
+    // Google Sign-In nativo (plugins de Capacitor)
+    'cancelled': 'Cancelaste el acceso con Google.',
+    'canceled': 'Cancelaste el acceso con Google.',
+    'unavailable': 'Google Sign-In no está disponible en este dispositivo.',
+    'notConfigured': 'Google Sign-In no está configurado. Verifica la configuracion de Firebase y vuelve a intentarlo.',
+    'operation-in-progress': 'Ya hay un inicio de sesion con Google en proceso.',
   };
 
-  return errorMap[code] ?? 'No se pudo completar la autenticacion. Intenta de nuevo.';
+  const fallback =
+    typeof error === 'object' && error !== null && 'message' in error && String(error.message)
+      ? String(error.message)
+      : '';
+
+  return errorMap[code] ?? fallback ?? 'No se pudo completar la autenticacion. Intenta de nuevo.';
 }
 
 function applyUser(set: (partial: Partial<AuthState>) => void, user: User | null) {
@@ -175,6 +191,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         error: null,
       });
     } catch (error) {
+      logger.error('Dev user sign-in failed.', error);
       set({
         isReady: true,
         isLoading: false,
@@ -188,6 +205,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     try {
       await signInWithGoogle();
     } catch (error) {
+      logger.error('Google Sign-In failed.', error);
       set({ isLoading: false, error: getFirebaseErrorMessage(error) });
       throw error;
     }

@@ -1,6 +1,7 @@
 import { initializeApp } from "firebase/app";
 import { getFirestore } from "firebase/firestore";
-import { getAuth } from "firebase/auth";
+import { getAuth, indexedDBLocalPersistence, initializeAuth } from "firebase/auth";
+import { Capacitor } from "@capacitor/core";
 
 // IMPORTANTE: Nunca subir credenciales hardcodeadas al repositorio.
 const firebaseConfig = {
@@ -16,4 +17,10 @@ const app = initializeApp(firebaseConfig);
 
 // TODO: (Ejercicio) Crear un Wrapper Pattern en la base de datos
 export const db = getFirestore(app);
-export const auth = getAuth(app);
+
+// En WebView nativo (Capacitor) se usa persistencia IndexedDB para que la sesión
+// sobreviva al cierre y reapertura de la app. En web se conserva el
+// comportamiento por defecto (localStorage).
+export const auth = Capacitor.isNativePlatform()
+    ? initializeAuth(app, { persistence: indexedDBLocalPersistence })
+    : getAuth(app);

@@ -1,16 +1,23 @@
-import { webNotificationService, type NotificationService } from './WebNotificationService';
+import { platformService } from '../platform/PlatformService';
+import { webNotificationService } from './WebNotificationService';
+import { nativeNotificationService } from './NativeNotificationService';
+import type { NotificationService } from './types';
 
-export type { NotificationService };
-export type { NotificationPermissionStatus, ReminderPayload, ScheduledReminder } from './types';
+export type {
+    NotificationPermissionStatus,
+    NotificationService,
+    ReminderPayload,
+    ScheduledReminder,
+} from './types';
 
 // Punto único de entrada para las notificaciones en toda la app.
-// Los componentes y la lógica de aplicación dependen de esta abstracción,
-// nunca de la implementación concreta (navegador o, en el futuro, Capacitor).
-//
-// Punto de extensión (Fase 3): cuando exista NativeNotificationService, aquí
-// se seleccionará según la plataforma:
-//
-//   export const notificationService: NotificationService =
-//       platformService.isNative() ? nativeNotificationService : webNotificationService;
-//
-export const notificationService: NotificationService = webNotificationService;
+// La implementación se elige aquí según la plataforma; el resto de la
+// aplicación consume la misma interfaz sin saber dónde corre.
+function resolveNotificationService(): NotificationService {
+    if (platformService.isNative()) {
+        return nativeNotificationService;
+    }
+    return webNotificationService;
+}
+
+export const notificationService: NotificationService = resolveNotificationService();

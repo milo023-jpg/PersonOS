@@ -4,11 +4,12 @@ import { useTasksStore } from '../../../application/store/tasksStore';
 import { useTaskListsStore } from '../../../application/store/taskListsStore';
 import { useContextsStore } from '../../../../contexts/application/store/contextsStore';
 import { GENERAL_LIST_ID } from '../../../domain/constants/defaults';
-import type { Task, TaskPriority, TaskStatus } from '../../../domain/models/Task';
+import type { Task, TaskPriority, TaskStatus, CustomReminder } from '../../../domain/models/Task';
 import DatePickerPopover from './DatePickerPopover';
 import { logger } from '../../../../../shared/utils/logger';
-import { buildTaskReminder, cancelTaskReminder } from '../../../application/services/taskReminder';
-import { notificationService, type NotificationPermissionStatus } from '../../../../../services/notifications/NotificationService';
+import { buildSingleTaskReminders, getEffectiveReminders } from '../../../application/services/taskReminder';
+import { notificationService } from '../../../../../services/notifications/NotificationService';
+import ReminderSheet from '../Reminders/ReminderSheet';
 
 interface Props {
   onCancel: () => void;
@@ -24,38 +25,6 @@ const priorities: { value: TaskPriority, label: string, color: string }[] = [
     { value: 'high', label: 'Alta', color: 'text-orange-500' },
     { value: 'medium', label: 'Media', color: 'text-blue-400' },
     { value: 'low', label: 'Baja', color: 'text-gray-400' }
-];
-
-function formatReminderInput(timestamp?: number): string {
-    if (!timestamp) return '';
-    const d = new Date(timestamp);
-    const year = d.getFullYear();
-    const month = String(d.getMonth() + 1).padStart(2, '0');
-    const day = String(d.getDate()).padStart(2, '0');
-    const hours = String(d.getHours()).padStart(2, '0');
-    const minutes = String(d.getMinutes()).padStart(2, '0');
-    return `${year}-${month}-${day}T${hours}:${minutes}`;
-}
-
-const quickReminderOptions = [
-    { label: 'En 1 hora', compute: () => Date.now() + 60 * 60 * 1000 },
-    {
-        label: 'Esta noche (21:00)',
-        compute: () => {
-            const d = new Date();
-            d.setHours(21, 0, 0, 0);
-            return d.getTime();
-        },
-    },
-    {
-        label: 'Mañana 09:00',
-        compute: () => {
-            const d = new Date();
-            d.setDate(d.getDate() + 1);
-            d.setHours(9, 0, 0, 0);
-            return d.getTime();
-        },
-    },
 ];
 
 export default function InlineTaskCreator({ onCancel, defaultContextId, defaultListId, defaultDate, defaultStatus = 'todo', editTask }: Props) {
@@ -85,15 +54,11 @@ export default function InlineTaskCreator({ onCancel, defaultContextId, defaultL
     const [isPriorityOpen, setIsPriorityOpen] = useState(false);
     const [isDateOpen, setIsDateOpen] = useState(false);
     const [isTimeOpen, setIsTimeOpen] = useState(false);
-    const [isReminderOpen, setIsReminderOpen] = useState(false);
-
-    const [reminderAt, setReminderAt] = useState<number | undefined>(editTask?.reminderAt);
-    const [reminderInput, setReminderInput] = useState<string>(formatReminderInput(editTask?.reminderAt));
+    const [isReminderSheetOpen, setIsReminderSheetOpen] = useState(false);
+    const [customReminders, setCustomReminders] = useState<CustomReminder[]>(() =>
+        editTask ? getEffectiveReminders(editTask) : []
+    );
     const [reminderError, setReminderError] = useState<string | null>(null);
-    const [reminderPermission, setReminderPermission] = useState<NotificationPermissionStatus>(() => {
-        const p = notificationService.getPermission();
-        return p === 'unsupported' ? 'denied' : p;
-    });
     
     // Selectors
     const [isListOpen, setIsListOpen] = useState(false);
@@ -107,7 +72,6 @@ export default function InlineTaskCreator({ onCancel, defaultContextId, defaultL
     const listRef = useRef<HTMLDivElement>(null);
     const contextRef = useRef<HTMLDivElement>(null);
     const timeRef = useRef<HTMLDivElement>(null);
-    const reminderRef = useRef<HTMLDivElement>(null);
 
     // Cerrar dropdown si se hace click fuera
     useEffect(() => {
@@ -124,9 +88,6 @@ export default function InlineTaskCreator({ onCancel, defaultContextId, defaultL
             if (timeRef.current && !timeRef.current.contains(event.target as Node)) {
                 setIsTimeOpen(false);
             }
-            if (reminderRef.current && !reminderRef.current.contains(event.target as Node)) {
-                setIsReminderOpen(false);
-            }
         };
         document.addEventListener('mousedown', handleClickOutside);
         return () => document.removeEventListener('mousedown', handleClickOutside);
@@ -139,21 +100,6 @@ export default function InlineTaskCreator({ onCancel, defaultContextId, defaultL
 
         setIsLoading(true);
         setReminderError(null);
-
-        let scheduledAt: number | undefined;
-        if (reminderAt !== undefined) {
-            if (reminderAt <= Date.now()) {
-                setReminderError('El recordatorio debe ser en el futuro.');
-                setIsLoading(false);
-                return;
-            }
-            scheduledAt = reminderAt;
-        }
-
-        if (reminderAt !== undefined && notificationService.getPermission() !== 'granted' && notificationService.isAvailable()) {
-            const p = await notificationService.requestPermission();
-            setReminderPermission(p);
-        }
 
         try {
             const updates: Partial<Task> = {
@@ -186,12 +132,10 @@ export default function InlineTaskCreator({ onCancel, defaultContextId, defaultL
             
             updates.contextId = selectedContextId || undefined;
 
-            if (reminderAt !== undefined) {
-                updates.reminderAt = reminderAt;
-                updates.reminderStatus = 'scheduled';
+            if (customReminders.length > 0) {
+                updates.customReminders = customReminders;
             } else {
-                updates.reminderAt = undefined;
-                updates.reminderStatus = undefined;
+                updates.customReminders = [];
             }
 
             let savedTaskId: string;
@@ -212,28 +156,25 @@ export default function InlineTaskCreator({ onCancel, defaultContextId, defaultL
                 savedTaskId = await addTask(newTask);
             }
 
-            // Sincronizar la notificación local
-            if (scheduledAt !== undefined) {
-                if (!notificationService.isAvailable()) {
-                    setReminderError('Este dispositivo no puede mostrar notificaciones programadas. Se guardó la tarea, pero el recordatorio no se activará.');
-                } else if (notificationService.getPermission() !== 'granted') {
-                    setReminderError('PersonOS no tiene permiso para notificarte. Haz clic en el candado junto a la URL (o en "Permisos" del sitio) y habilita "Notificaciones". Tu tarea se guardó, pero el recordatorio no se disparará.');
-                } else {
-                    const payload = buildTaskReminder({
-                        id: savedTaskId,
-                        title: title.trim(),
-                        status: editTask?.status || defaultStatus,
-                        reminderAt: scheduledAt,
-                    } as Task);
-                    if (payload) {
-                        const ok = await notificationService.schedule(payload);
-                        if (!ok) {
-                            setReminderError('No se pudo programar el recordatorio en este navegador. Tu tarea se guardó correctamente.');
-                        }
-                    }
+            // Programar notificaciones: automáticas de la fecha límite + recordatorios
+            // personalizados. El sync (useReminderSync) las mantiene idempotentes.
+            const taskSnapshot = {
+                id: savedTaskId,
+                title: title.trim(),
+                status: editTask?.status || defaultStatus,
+                dueDate: updates.dueDate,
+                customReminders: customReminders.length > 0 ? customReminders : undefined,
+            } as Task;
+            const reminderPayloads = buildSingleTaskReminders(taskSnapshot);
+            let customScheduleFailed = false;
+            for (const payload of reminderPayloads) {
+                const ok = await notificationService.schedule(payload);
+                if (!ok && payload.tag.includes('custom')) {
+                    customScheduleFailed = true;
                 }
-            } else if (editTask?.reminderAt !== undefined) {
-                await cancelTaskReminder(editTask.id);
+            }
+            if (customScheduleFailed) {
+                setReminderError('No se pudo programar un recordatorio en este dispositivo. La tarea se guardó correctamente.');
             }
 
             // Cerrar el modal/formulario
@@ -260,52 +201,9 @@ export default function InlineTaskCreator({ onCancel, defaultContextId, defaultL
         return d.toLocaleDateString('es-ES', { month: 'short', day: 'numeric' });
     };
 
-    const formatScheduledReminder = (timestamp: number) =>
-        new Date(timestamp).toLocaleString('es-ES', {
-            day: 'numeric',
-            month: 'short',
-            hour: '2-digit',
-            minute: '2-digit',
-        });
-
-    const applyReminderTime = (at: number) => {
-        setReminderInput(formatReminderInput(at));
-        setReminderAt(at);
+    const addReminder = (at: number) => {
+        setCustomReminders((list) => [...list, { id: crypto.randomUUID(), at }]);
         setReminderError(null);
-    };
-
-    const handleSaveReminderInput = () => {
-        const timestamp = reminderInput ? new Date(reminderInput).getTime() : NaN;
-        if (!Number.isFinite(timestamp)) {
-            setReminderError('Elige una fecha y hora válidas.');
-            return;
-        }
-        if (timestamp <= Date.now()) {
-            setReminderError('El recordatorio debe ser en el futuro.');
-            return;
-        }
-        setReminderAt(timestamp);
-        setReminderError(null);
-        setIsReminderOpen(false);
-    };
-
-    const handleClearReminder = () => {
-        setReminderAt(undefined);
-        setReminderInput('');
-        setReminderError(null);
-        setIsReminderOpen(false);
-    };
-
-    const handleEnableNotifications = async () => {
-        if (!notificationService.isAvailable()) {
-            setReminderPermission('denied');
-            return;
-        }
-        const p = await notificationService.requestPermission();
-        setReminderPermission(p);
-        if (p === 'denied') {
-            setReminderError('Las notificaciones están bloqueadas por el navegador. Actívalas tocando el candado junto a la URL (o Ajustes → Notificaciones del sitio) y eligiendo Permitir.');
-        }
     };
 
     return (
@@ -425,101 +323,58 @@ export default function InlineTaskCreator({ onCancel, defaultContextId, defaultL
                     )}
                 </div>
 
-                {/* 3. Recordatorio */}
-                <div className="relative shrink-0" ref={reminderRef}>
-                    <button 
+                {/* 3. Recordatorios personalizados */}
+                <div className="relative shrink-0">
+                    <button
                         type="button"
-                        title="Recordatorio"
+                        title="Recordatorios personalizados"
                         onClick={async () => {
                             setReminderError(null);
-                            if (reminderPermission === 'default') {
-                                const p = await notificationService.requestPermission();
-                                setReminderPermission(p);
+                            if (!notificationService.isAvailable()) {
+                                setReminderError('Las notificaciones no están disponibles en este dispositivo.');
+                                return;
                             }
-                            setIsReminderOpen(!isReminderOpen);
+                            if (notificationService.getPermission() !== 'granted') {
+                                await notificationService.requestPermission();
+                            }
+                            setIsReminderSheetOpen(true);
                         }}
                         className={`px-3 sm:px-4 py-2 rounded-full text-sm font-bold flex items-center gap-2 transition-colors ${
-                            reminderAt
+                            customReminders.length > 0
                                 ? 'bg-primary/20 text-primary dark:text-purple-300'
                                 : 'bg-gray-100 dark:bg-white/5 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-white/10'
                         }`}
                     >
                         <span>🔔</span>
-                        {reminderAt ? formatScheduledReminder(reminderAt) : 'Recordarme'}
+                        {customReminders.length > 0 ? `${customReminders.length} recordatorios` : 'Recordarme'}
                     </button>
-                    {isReminderOpen && (
-                        <div className="absolute top-full right-0 mt-2 bg-white dark:bg-[#1a1a24] border border-gray-200 dark:border-white/10 rounded-2xl shadow-xl z-[60] overflow-hidden w-[280px] max-w-[calc(100vw-2rem)] p-4 flex flex-col gap-3">
-                            {reminderPermission === 'granted' && (
-                                <>
-                                    <span className="text-xs font-black uppercase text-text-secondary tracking-wider">Programar recordatorio</span>
-                                    <input 
-                                        type="datetime-local"
-                                        value={reminderInput || formatReminderInput(reminderAt)}
-                                        onChange={(e) => setReminderInput(e.target.value)}
-                                        className="bg-gray-100 dark:bg-surface text-text-primary px-3 py-2.5 rounded-xl text-sm font-bold border border-gray-200 dark:border-white/10 focus:outline-none focus:ring-2 focus:ring-primary/20 w-full"
-                                    />
-                                    <div className="flex flex-col gap-1.5">
-                                        {quickReminderOptions.map((q) => (
-                                            <button
-                                                key={q.label}
-                                                type="button"
-                                                onClick={() => applyReminderTime(q.compute())}
-                                                className="w-full text-left px-3 py-2 text-xs font-bold rounded-xl hover:bg-gray-100 dark:hover:bg-white/10 text-text-primary flex items-center gap-2 transition-colors"
-                                            >
-                                                <span>⚡</span>
-                                                {q.label}
-                                            </button>
-                                        ))}
-                                    </div>
-                                    <button 
-                                        type="button"
-                                        onClick={handleSaveReminderInput}
-                                        className="w-full px-3 py-2.5 text-sm font-bold rounded-xl text-white bg-gradient-to-r from-[#A04AF9] to-[#C33FFF] hover:from-[#8f41e5] hover:to-[#b43aeb] shadow-[0_0_15px_rgba(160,74,249,0.3)] transition-all active:scale-[0.98]"
-                                    >
-                                        Listo
-                                    </button>
-                                    {reminderAt !== undefined && (
-                                        <button 
-                                            type="button"
-                                            onClick={handleClearReminder}
-                                            className="w-full px-3 py-2 text-sm font-bold rounded-xl text-red-500 hover:bg-red-500/10 transition-colors"
-                                        >
-                                            Quitar recordatorio
-                                        </button>
-                                    )}
-                                </>
-                            )}
-
-                            {reminderPermission === 'default' && (
-                                <>
-                                    <span className="text-xs font-black uppercase text-text-secondary tracking-wider">Activa las notificaciones</span>
-                                    <p className="text-sm font-medium text-text-primary">
-                                        Para programar recordatorios necesitas permitir notificaciones en este dispositivo.
-                                    </p>
-                                    <button 
-                                        type="button"
-                                        onClick={() => { void handleEnableNotifications(); }}
-                                        className="w-full px-3 py-2.5 text-sm font-bold rounded-xl text-white bg-gradient-to-r from-[#A04AF9] to-[#C33FFF] hover:from-[#8f41e5] hover:to-[#b43aeb] shadow-[0_0_15px_rgba(160,74,249,0.3)] transition-all active:scale-[0.98]"
-                                    >
-                                        Activar notificaciones
-                                    </button>
-                                </>
-                            )}
-
-                            {reminderPermission === 'denied' && (
-                                <>
-                                    <span className="text-xs font-black uppercase text-text-secondary tracking-wider">Notificaciones bloqueadas</span>
-                                    <p className="text-sm font-medium text-text-primary">
-                                        Las notificaciones están bloqueadas por el navegador. Actívalas tocando el candado junto a la URL (o Ajustes → Notificaciones del sitio) y eligiendo Permitir.
-                                    </p>
-                                </>
-                            )}
-
-                            {reminderError && <p className="text-xs font-bold text-red-500">{reminderError}</p>}
-                        </div>
-                    )}
                 </div>
             </div>
+
+            {customReminders.length > 0 && (
+                <div className="flex flex-wrap gap-2 w-full -mt-3 mb-2">
+                    {customReminders.map((reminder) => (
+                        <span
+                            key={reminder.id}
+                            className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-primary/10 text-primary dark:text-purple-300 text-xs font-bold"
+                        >
+                            <span>🔔</span>
+                            {new Date(reminder.at).toLocaleDateString('es-ES', { day: 'numeric', month: 'short' })} ·
+                            {new Date(reminder.at).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })}
+                            <button
+                                type="button"
+                                onClick={() => setCustomReminders((list) => list.filter((r) => r.id !== reminder.id))}
+                                className="hover:text-red-500 font-black px-1 transition-colors"
+                                title="Eliminar recordatorio"
+                            >
+                                ✕
+                            </button>
+                        </span>
+                    ))}
+                </div>
+            )}
+
+            {reminderError && <p className="text-xs font-bold text-red-500">{reminderError}</p>}
 
             <div className="w-full h-px bg-gray-200 dark:bg-white/5 mb-5"></div>
 
@@ -660,6 +515,13 @@ export default function InlineTaskCreator({ onCancel, defaultContextId, defaultL
                     </button>
                 </div>
             </div>
+
+            {isReminderSheetOpen && (
+                <ReminderSheet
+                    onClose={() => setIsReminderSheetOpen(false)}
+                    onSave={addReminder}
+                />
+            )}
         </div>
     );
 }

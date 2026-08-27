@@ -20,6 +20,7 @@ export default function SingleListView({ onSelectTask, listId }: Props) {
     const { lists } = useTaskListsStore();
     const [inputValue, setInputValue] = useState('');
     const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
+    const [isCreatorOpen, setIsCreatorOpen] = useState(false);
 
     const list = lists.find(l => l.id === listId);
     const listTasks = tasks.filter(t => t.listId === listId && t.status !== 'completed');
@@ -53,11 +54,11 @@ export default function SingleListView({ onSelectTask, listId }: Props) {
     }
 
     return (
+        <>
         <SystemScrollArea className="w-full h-full flex flex-col p-6 max-w-3xl mx-auto gap-6">
             <div className="bg-surface rounded-2xl p-2 pl-4 border border-blue-500 shadow-sm shadow-blue-500/10 flex items-center gap-3 shrink-0">
-                <svg className="w-5 h-5 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4"></path></svg>
+                <svg className="w-5 h-5 text-blue-500 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4"></path></svg>
                 <input 
-                    autoFocus
                     type="text" 
                     value={inputValue}
                     onChange={(e) => setInputValue(e.target.value)}
@@ -98,5 +99,27 @@ export default function SingleListView({ onSelectTask, listId }: Props) {
                 )}
             </div>
         </SystemScrollArea>
+
+        {/* Botón flotante */}
+        <button
+            type="button"
+            onClick={() => setIsCreatorOpen(true)}
+            className="fixed bottom-6 right-6 bg-primary text-white rounded-full w-14 h-14 flex items-center justify-center shadow-lg hover:bg-primary/90 transition-colors"
+            title="Añadir tarea a esta lista"
+        >
+            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path>
+            </svg>
+        </button>
+
+        {/* Modal de Creación */}
+        {isCreatorOpen && (
+            <div className="fixed inset-0 z-50 flex items-start justify-center pt-16 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200" onClick={() => setIsCreatorOpen(false)}>
+                <div className="w-full max-w-2xl px-4 pb-8 max-h-full overflow-y-auto overscroll-contain" onClick={e => e.stopPropagation()}>
+                    <InlineTaskCreator defaultListId={listId} onCancel={() => setIsCreatorOpen(false)} />
+                </div>
+            </div>
+        )}
+        </>
     );
 }

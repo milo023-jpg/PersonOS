@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { motion } from 'framer-motion';
 import { useAuthStore } from '../../../auth/application/store/authStore';
 import { useTasksStore } from '../../application/store/tasksStore';
@@ -9,7 +9,7 @@ import InlineTaskCreator from '../components/TaskList/InlineTaskCreator';
 import CreateListModal from '../components/TaskList/CreateListModal';
 import { isDueBeforeOrToday, toTaskDateTimestamp } from '../../domain/utils/taskDate';
 import { useReminderSync } from '../../../../shared/hooks/useReminderSync';
-import { buildTaskReminder } from '../../application/services/taskReminder';
+import { buildTaskReminders } from '../../application/services/taskReminder';
 
 export default function TasksHomeMobile() {
     const { userId } = useAuthStore();
@@ -28,7 +28,8 @@ export default function TasksHomeMobile() {
         }
     }, [userId, fetchTasks, fetchLists]);
 
-    useReminderSync(tasks, buildTaskReminder, [tasks, userId]);
+    const reminderPayloads = useMemo(() => buildTaskReminders(tasks), [tasks]);
+    useReminderSync(reminderPayloads, [reminderPayloads, userId]);
 
     const todayCount = tasks.filter(t => {
         if (t.status === 'completed') return false;

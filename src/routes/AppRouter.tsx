@@ -1,4 +1,4 @@
-import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { HashRouter, Routes, Route, Navigate } from "react-router-dom";
 import MainLayout from "../layout/MainLayout";
 import RouteFavicon from "../shared/RouteFavicon";
 import Dashboard from '../modules/dashboard/presentation/pages/Dashboard';
@@ -20,7 +20,7 @@ import LoginPage from '../modules/auth/presentation/pages/LoginPage';
 
 export default function AppRouter() {
     return (
-        <BrowserRouter>
+        <HashRouter>
             <RouteFavicon />
             <Routes>
                 <Route path="/login" element={<LoginPage />} />
@@ -49,6 +49,6 @@ export default function AppRouter() {
                     <Route path="/stats" element={<StatsPage />} />
                 </Route>
             </Routes>
-        </BrowserRouter>
+        </HashRouter>
     );
 }

@@ -1,0 +1,39 @@
+{
+  "project_info": {
+    "project_number": "552561771760",
+    "project_id": "personal-os-1b5a5",
+    "storage_bucket": "personal-os-1b5a5.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:552561771760:android:843c52874482d7084eee35",
+        "android_client_info": {
+          "package_name": "com.personos.app"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "552561771760-rp1039np5p0a9g1mvjpvg8frhv3b5gnn.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDUucaKDkfUVx06QN0QwJRi3iViscZY0Vk"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "552561771760-rp1039np5p0a9g1mvjpvg8frhv3b5gnn.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

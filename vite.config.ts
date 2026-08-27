@@ -6,7 +6,8 @@ import { MODULE_SHORTCUTS } from './src/shared/appShortcuts'
 const shortcutEntries: NonNullable<ManifestOptions['shortcuts']> = MODULE_SHORTCUTS.map(
     (shortcut) => ({
         name: shortcut.label,
-        url: shortcut.path,
+        // Con HashRouter las rutas viven en el hash: /tasks → #/tasks.
+        url: `#${shortcut.path}`,
         icons: [
             {
                 src: shortcut.iconPath,
@@ -26,7 +27,9 @@ export default defineConfig({
             srcDir: 'src',
             filename: 'sw.ts',
             registerType: 'autoUpdate',
-            injectRegister: 'auto',
+            // El registro se controla manualmente desde src/main.tsx para evitar
+            // registrar el SW dentro de la WebView de Capacitor (Android).
+            injectRegister: false,
             includeAssets: ['favicon.svg', 'apple-touch-icon.png', 'masked-icon.svg'],
             injectManifest: {
                 globPatterns: ['**/*.{js,css,html,ico,png,svg}']

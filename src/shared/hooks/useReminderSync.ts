@@ -1,37 +1,34 @@
-import { useEffect } from 'react';
+import { useEffect, type DependencyList } from 'react';
 import { notificationService } from '../../services/notifications/NotificationService';
 import type { ReminderPayload } from '../../services/notifications/types';
 
-export function useReminderSync<T>(
-    items: T[],
-    buildPayload: (item: T) => ReminderPayload | null,
-    deps: unknown[] = []
-) {
+// Orquestador de sincronización: recibe los payloads que DEBEN existir y
+// sincroniza con el sistema de notificaciones de la plataforma:
+//  1. Programa todos los pendientes (idempotente, no duplica).
+//  2. Cancela los que ya no corresponden (tarea completada, fecha eliminada,
+//     recordatorio borrado, etc.).
+export function useReminderSync(payloads: ReminderPayload[], deps: DependencyList) {
     useEffect(() => {
         if (!notificationService.isAvailable() || notificationService.getPermission() !== 'granted') return;
 
         let cancelled = false;
         let inFlight = false;
 
+        const now = Date.now();
+        const payloadsToSchedule = payloads.filter((payload) => payload.at > now);
+
         const sync = async () => {
             if (cancelled || inFlight) return;
             inFlight = true;
 
             try {
-                const now = Date.now();
-                const payloads = items
-                    .map(buildPayload)
-                    .filter((p): p is ReminderPayload => p !== null && p.at > now);
-
                 const existing = await notificationService.getScheduled();
-                const existingByTag = new Map(existing.map((n) => [n.tag, n]));
-                const payloadByTag = new Map(payloads.map((p) => [p.tag, p]));
+                const existingByTag = new Map(existing.map((notification) => [notification.tag, notification]));
+                const payloadByTag = new Map(payloadsToSchedule.map((payload) => [payload.tag, payload]));
 
-                // En móvil los timers del SW no sobreviven a un reinicio, así que
-                // re-programamos todos los pendientes (idempotente: no duplica).
-                for (const p of payloads) {
+                for (const payload of payloadsToSchedule) {
                     if (cancelled) return;
-                    await notificationService.schedule(p);
+                    await notificationService.schedule(payload);
                 }
 
                 for (const existingTag of existingByTag.keys()) {
@@ -51,5 +48,5 @@ export function useReminderSync<T>(
             cancelled = true;
         };
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [...deps]);
+    }, deps);
 }

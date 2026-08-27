@@ -13,7 +13,7 @@ import { GENERAL_LIST_ID } from '../../domain/constants/defaults';
 import { isDueBeforeOrToday, toTaskDateTimestamp } from '../../domain/utils/taskDate';
 import { logger } from '../../../../shared/utils/logger';
 import { useReminderSync } from '../../../../shared/hooks/useReminderSync';
-import { buildTaskReminder } from '../../application/services/taskReminder';
+import { buildTaskReminders } from '../../application/services/taskReminder';
 
 type ViewMode = 'today' | 'all' | 'lists' | 'board';
 
@@ -35,8 +35,9 @@ export default function TasksPageDesktop() {
         }
     }, [userId, fetchTasks, fetchLists]);
 
-    // Sincronizar recordatorios locales con las tareas (fuego-y-olvido silencioso)
-    useReminderSync(tasks, buildTaskReminder, [tasks]);
+    // Sincronizar recordatorios con las tareas (automáticos + personalizados + resumen diario)
+    const reminderPayloads = useMemo(() => buildTaskReminders(tasks), [tasks]);
+    useReminderSync(reminderPayloads, [reminderPayloads]);
 
     const tabs = useMemo(() => [
         {

@@ -2,12 +2,13 @@ import { useState, useRef, useEffect } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { useAuthStore } from '../../../../auth/application/store/authStore';
 import ContextSelector from '../../../../contexts/presentation/components/ContextSelector';
-import type { Task, TaskPriority, TaskStatus } from '../../../domain/models/Task';
+import type { Task, TaskPriority, TaskStatus, CustomReminder } from '../../../domain/models/Task';
 import { useTasksStore } from '../../../application/store/tasksStore';
 import { formatDateForInput, parseInputDateToTimestamp } from '../../../domain/utils/taskDate';
 import SubtaskList from '../Subtasks/SubtaskList';
-import { buildTaskReminder, cancelTaskReminder } from '../../../application/services/taskReminder';
-import { notificationService, type NotificationPermissionStatus } from '../../../../../services/notifications/NotificationService';
+import { getEffectiveReminders } from '../../../application/services/taskReminder';
+import { notificationService } from '../../../../../services/notifications/NotificationService';
+import ReminderSheet from '../Reminders/ReminderSheet';
 
 interface Props {
   task: Task | null;
@@ -27,53 +28,53 @@ const statuses: { value: TaskStatus, label: string, color: string, icon: string 
     { value: 'completed', label: 'Completada', color: 'text-success', icon: '✓' }
 ];
 
-const quickReminderOptions = [
-    { label: 'En 1 hora', compute: () => Date.now() + 60 * 60 * 1000 },
-    {
-        label: 'Esta noche (21:00)',
-        compute: () => {
-            const d = new Date();
-            d.setHours(21, 0, 0, 0);
-            return d.getTime();
-        },
-    },
-    {
-        label: 'Mañana 09:00',
-        compute: () => {
-            const d = new Date();
-            d.setDate(d.getDate() + 1);
-            d.setHours(9, 0, 0, 0);
-            return d.getTime();
-        },
-    },
-];
-
 export default function TaskDetailPanel({ task, onClose }: Props) {
     const { userId } = useAuthStore();
     const { updateTask, moveTaskStatus, addSubtask, toggleSubtask, editSubtask, deleteSubtask } = useTasksStore();
 
     const [isStatusOpen, setIsStatusOpen] = useState(false);
     const [isPriorityOpen, setIsPriorityOpen] = useState(false);
-    const [isReminderOpen, setIsReminderOpen] = useState(false);
-    const [reminderInput, setReminderInput] = useState('');
+    const [isReminderSheetOpen, setIsReminderSheetOpen] = useState(false);
     const [reminderError, setReminderError] = useState<string | null>(null);
-    const [notificationPermission, setNotificationPermission] = useState<NotificationPermissionStatus>(() => notificationService.getPermission());
 
     const statusRef = useRef<HTMLDivElement>(null);
     const priorityRef = useRef<HTMLDivElement>(null);
-    const reminderRef = useRef<HTMLDivElement>(null);
 
     useEffect(() => {
         const handleClickOutside = (e: MouseEvent) => {
             if (statusRef.current && !statusRef.current.contains(e.target as Node)) setIsStatusOpen(false);
             if (priorityRef.current && !priorityRef.current.contains(e.target as Node)) setIsPriorityOpen(false);
-            if (reminderRef.current && !reminderRef.current.contains(e.target as Node)) setIsReminderOpen(false);
         };
         document.addEventListener('mousedown', handleClickOutside);
         return () => document.removeEventListener('mousedown', handleClickOutside);
     }, []);
 
     if (!task) return null;
+
+    const taskReminders = getEffectiveReminders(task);
+
+    const addReminder = async (at: number) => {
+        if (!userId) return;
+        setReminderError(null);
+        let permission = notificationService.getPermission();
+        if (permission !== 'granted' && notificationService.isAvailable()) {
+            permission = await notificationService.requestPermission();
+        }
+        if (permission !== 'granted') {
+            setReminderError('Para recibir recordatorios debes permitir las notificaciones.');
+            return;
+        }
+        const reminders = getEffectiveReminders(task);
+        if (reminders.some((reminder) => reminder.at === at)) return;
+        const next: CustomReminder[] = [...reminders, { id: crypto.randomUUID(), at }];
+        await updateTask(userId, task.id, { customReminders: next });
+    };
+
+    const removeReminder = async (reminderId: string) => {
+        if (!userId) return;
+        const next = getEffectiveReminders(task).filter((reminder) => reminder.id !== reminderId);
+        await updateTask(userId, task.id, { customReminders: next });
+    };
 
     const handleChangeRecord = (field: Partial<Task>) => {
         if(userId) updateTask(userId, task.id, field);
@@ -114,92 +115,6 @@ export default function TaskDetailPanel({ task, onClose }: Props) {
 
     const currentStatus = statuses.find(s => s.value === task.status);
     const currentPriority = priorities.find(p => p.value === task.priority);
-
-    const formatReminderForInput = (timestamp?: number) => {
-        if (!timestamp) return '';
-        const d = new Date(timestamp);
-        const year = d.getFullYear();
-        const month = String(d.getMonth() + 1).padStart(2, '0');
-        const day = String(d.getDate()).padStart(2, '0');
-        const hours = String(d.getHours()).padStart(2, '0');
-        const minutes = String(d.getMinutes()).padStart(2, '0');
-        return `${year}-${month}-${day}T${hours}:${minutes}`;
-    };
-
-    const formatScheduledReminder = (timestamp: number) =>
-        new Date(timestamp).toLocaleString('es-ES', {
-            weekday: 'short',
-            day: 'numeric',
-            month: 'short',
-            hour: '2-digit',
-            minute: '2-digit',
-        });
-
-    const setReminderAt = async (at: number) => {
-        setReminderError(null);
-        if (!userId) return;
-
-        if (!notificationService.isAvailable()) {
-            setReminderError('Las notificaciones programadas no están disponibles en este navegador.');
-            return;
-        }
-
-        let permission = notificationService.getPermission();
-        if (permission !== 'granted') {
-            permission = await notificationService.requestPermission();
-        }
-
-        if (permission !== 'granted') {
-            setReminderError('Las notificaciones están bloqueadas en este navegador. Actívalas desde los ajustes del sitio (p. ej. Chrome: haz clic en el candado junto a la URL y habilita "Notificaciones") y vuelve a intentarlo.');
-            setIsReminderOpen(false);
-            return;
-        }
-
-        const payload = buildTaskReminder({ ...task, reminderAt: at });
-        if (payload) {
-            const ok = await notificationService.schedule(payload);
-            if (!ok) {
-                setReminderError('No se pudo programar el recordatorio en este navegador.');
-                return;
-            }
-        }
-
-        await updateTask(userId, task.id, { reminderAt: at, reminderStatus: 'scheduled' });
-        setIsReminderOpen(false);
-    };
-
-    const handleSaveReminder = () => {
-        const timestamp = reminderInput ? new Date(reminderInput).getTime() : NaN;
-        if (!Number.isFinite(timestamp)) {
-            setReminderError('Elige una fecha y hora válidas.');
-            return;
-        }
-        if (timestamp <= Date.now()) {
-            setReminderError('El recordatorio debe ser en el futuro.');
-            return;
-        }
-        void setReminderAt(timestamp);
-    };
-
-    const handleRemoveReminder = async () => {
-        if (!userId) return;
-        setReminderError(null);
-        await cancelTaskReminder(task.id);
-        await updateTask(userId, task.id, { reminderAt: undefined, reminderStatus: undefined });
-        setIsReminderOpen(false);
-    };
-
-    const handleEnableNotifications = async () => {
-        if (!notificationService.isAvailable()) {
-            setNotificationPermission('unsupported');
-            return;
-        }
-        const p = await notificationService.requestPermission();
-        setNotificationPermission(p);
-        if (p === 'denied') {
-            setReminderError('Las notificaciones están bloqueadas por el navegador. Actívalas tocando el candado junto a la URL (o Ajustes → Notificaciones del sitio) y eligiendo Permitir.');
-        }
-    };
 
     return (
         <AnimatePresence>
@@ -326,116 +241,49 @@ export default function TaskDetailPanel({ task, onClose }: Props) {
                                 )}
                             </div>
 
-                            {/* Recordatorio */}
-                            <div className="flex flex-col gap-2">
-                                <div ref={reminderRef} className="relative w-max">
-                                    <button 
-                                        type="button"
-                                        onClick={async () => {
-                                            setReminderError(null);
-                                            if (notificationPermission === 'default') {
-                                                const p = await notificationService.requestPermission();
-                                                setNotificationPermission(p);
-                                            }
-                                            setIsReminderOpen(!isReminderOpen);
-                                        }}
-                                        className={`px-4 py-2.5 rounded-xl text-sm font-bold flex items-center gap-2 transition-colors ${
-                                            task.reminderAt
-                                                ? 'bg-primary/20 text-primary dark:text-purple-300'
-                                                : 'bg-white dark:bg-surface text-text-primary border border-gray-200 dark:border-white/10 shadow-sm hover:bg-gray-50 dark:hover:bg-white/10'
-                                        }`}
-                                    >
-                                        <span>🔔</span>
-                                        {task.reminderAt ? formatScheduledReminder(task.reminderAt) : 'Recordarme'}
-                                    </button>
+                            {/* Recordatorios */}
+                            <div className="flex flex-col gap-2 pt-2 border-t border-gray-100 dark:border-gray-800">
+                                <span className="text-xs font-black uppercase text-text-secondary tracking-wider">🔔 Recordatorios</span>
 
-                                    {isReminderOpen && (
-                                        <div className="absolute top-full right-0 mt-2 bg-white dark:bg-[#1a1a24] border border-gray-200 dark:border-white/10 rounded-2xl shadow-xl z-50 overflow-hidden w-[280px] max-w-[calc(100vw-2rem)] p-4 flex flex-col gap-3">
-                                            {notificationPermission === 'granted' && (
-                                                <>
-                                                    <span className="text-xs font-black uppercase text-text-secondary tracking-wider">Programar recordatorio</span>
-                                                    <input 
-                                                        type="datetime-local"
-                                                        value={reminderInput || formatReminderForInput(task.reminderAt)}
-                                                        onChange={(e) => setReminderInput(e.target.value)}
-                                                        className="bg-gray-100 dark:bg-surface text-text-primary px-3 py-2.5 rounded-xl text-sm font-bold border border-gray-200 dark:border-white/10 focus:outline-none focus:ring-2 focus:ring-primary/20 w-full"
-                                                    />
-                                                    <div className="flex flex-col gap-1.5">
-                                                        {quickReminderOptions.map((q) => (
-                                                            <button
-                                                                key={q.label}
-                                                                type="button"
-                                                                onClick={() => {
-                                                                    const at = q.compute();
-                                                                    setReminderInput(formatReminderForInput(at));
-                                                                    void setReminderAt(at);
-                                                                }}
-                                                                className="w-full text-left px-3 py-2 text-xs font-bold rounded-xl hover:bg-gray-100 dark:hover:bg-white/10 text-text-primary flex items-center gap-2 transition-colors"
-                                                            >
-                                                                <span>⚡</span>
-                                                                {q.label}
-                                                            </button>
-                                                        ))}
-                                                    </div>
-                                                    <button 
-                                                        type="button"
-                                                        onClick={handleSaveReminder}
-                                                        className="w-full px-3 py-2.5 text-sm font-black text-white rounded-xl bg-gradient-to-r from-[#A04AF9] to-[#C33FFF] hover:from-[#8f41e5] hover:to-[#b43aeb] shadow-[0_0_15px_rgba(160,74,249,0.3)] transition-all active:scale-[0.98]"
-                                                    >
-                                                        Programar
-                                                    </button>
-                                                    {task.reminderAt && (
-                                                        <button 
-                                                            type="button"
-                                                            onClick={() => { void handleRemoveReminder(); }}
-                                                            className="w-full px-3 py-2 text-sm font-bold rounded-xl text-red-500 hover:bg-red-500/10 transition-colors"
-                                                        >
-                                                            Quitar recordatorio
-                                                        </button>
-                                                    )}
-                                                </>
-                                            )}
+                                {taskReminders.length > 0 ? (
+                                    <div className="flex flex-wrap gap-2">
+                                        {taskReminders.map((reminder) => (
+                                            <span
+                                                key={reminder.id}
+                                                className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-primary/10 text-primary dark:text-purple-300 text-xs font-bold"
+                                            >
+                                                <span>🔔</span>
+                                                {new Date(reminder.at).toLocaleDateString('es-ES', { day: 'numeric', month: 'short' })} ·
+                                                {new Date(reminder.at).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })}
+                                                <button
+                                                    type="button"
+                                                    onClick={() => void removeReminder(reminder.id)}
+                                                    className="hover:text-red-500 font-black px-1 transition-colors"
+                                                    title="Eliminar recordatorio"
+                                                >
+                                                    ✕
+                                                </button>
+                                            </span>
+                                        ))}
+                                    </div>
+                                ) : (
+                                    <p className="text-sm font-medium text-text-secondary">
+                                        Recibirás aviso 1 hora antes y al vencer la fecha límite. Aquí puedes agregar recordatorios adicionales.
+                                    </p>
+                                )}
 
-                                            {notificationPermission === 'default' && (
-                                                <>
-                                                    <span className="text-xs font-black uppercase text-text-secondary tracking-wider">Activa las notificaciones</span>
-                                                    <p className="text-sm font-medium text-text-primary">
-                                                        Para programar recordatorios necesitas permitir notificaciones en este dispositivo.
-                                                    </p>
-                                                    <button 
-                                                        type="button"
-                                                        onClick={() => { void handleEnableNotifications(); }}
-                                                        className="w-full px-3 py-2.5 text-sm font-black text-white rounded-xl bg-gradient-to-r from-[#A04AF9] to-[#C33FFF] hover:from-[#8f41e5] hover:to-[#b43aeb] shadow-[0_0_15px_rgba(160,74,249,0.3)] transition-all active:scale-[0.98]"
-                                                    >
-                                                        Activar notificaciones
-                                                    </button>
-                                                </>
-                                            )}
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                        setReminderError(null);
+                                        setIsReminderSheetOpen(true);
+                                    }}
+                                    className="w-max px-4 py-2 rounded-xl text-sm font-bold border border-dashed border-gray-300 dark:border-white/10 text-text-secondary hover:text-primary hover:border-primary/40 transition-colors"
+                                >
+                                    + Agregar recordatorio
+                                </button>
 
-                                            {notificationPermission === 'denied' && (
-                                                <>
-                                                    <span className="text-xs font-black uppercase text-text-secondary tracking-wider">Notificaciones bloqueadas</span>
-                                                    <p className="text-sm font-medium text-text-primary">
-                                                        Las notificaciones están bloqueadas por el navegador. Actívalas tocando el candado junto a la URL (o Ajustes → Notificaciones del sitio) y eligiendo Permitir.
-                                                    </p>
-                                                </>
-                                            )}
-
-                                            {notificationPermission === 'unsupported' && (
-                                                <>
-                                                    <span className="text-xs font-black uppercase text-text-secondary tracking-wider">No disponible</span>
-                                                    <p className="text-sm font-medium text-text-primary">
-                                                        Las notificaciones programadas no son compatibles con este navegador.
-                                                    </p>
-                                                </>
-                                            )}
-
-                                            {reminderError && (
-                                                <p className="text-xs font-bold text-red-500">{reminderError}</p>
-                                            )}
-                                        </div>
-                                    )}
-                                </div>
+                                {reminderError && <p className="text-xs font-bold text-red-500">{reminderError}</p>}
                             </div>
                         </div>
 
@@ -476,6 +324,13 @@ export default function TaskDetailPanel({ task, onClose }: Props) {
                     
                 </motion.div>
             </motion.div>
+
+            {isReminderSheetOpen && (
+                <ReminderSheet
+                    onClose={() => setIsReminderSheetOpen(false)}
+                    onSave={(at) => void addReminder(at)}
+                />
+            )}
         </AnimatePresence>
     );
 }

@@ -1,16 +1,5 @@
 import { localNotifications } from '../localNotifications.service';
-import type { ReminderPayload, NotificationPermissionStatus, ScheduledReminder } from './types';
-
-export interface NotificationService {
-    isAvailable(): boolean;
-    getPermission(): NotificationPermissionStatus;
-    requestPermission(): Promise<NotificationPermissionStatus>;
-    schedule(payload: ReminderPayload): Promise<boolean>;
-    cancel(tag: string): Promise<void>;
-    getScheduled(): Promise<ScheduledReminder[]>;
-    buildTag(entityPrefix: string, id: string): string;
-    isScheduledNotificationTag(tag: string): boolean;
-}
+import type { ReminderPayload, NotificationPermissionStatus, ScheduledReminder, NotificationService } from './types';
 
 // Adaptador web: envuelve la implementación concreta actual (Web Notifications +
 // Service Worker con fallback por setTimeout). Los detalles quedan encapsulados.
