@@ -5,7 +5,9 @@ import { taskRepository } from '../../infrastructure/repositories/taskRepository
 import { dbService } from '../../../../services/dbService';
 import { normalizeTaskDocument, sanitizeSubtasks, type TaskDocument } from '../../../../scripts/normalizeTasks';
 import { logger } from '../../../../shared/utils/logger';
+import { useAuthStore } from '../../../../modules/auth/application/store/authStore';
 import { cancelTaskReminders } from '../services/taskReminder';
+import { pickNextOrder } from '../../domain/utils/taskSorting';
 
 function normalizeTask(task: Task): Task {
     return {
@@ -79,6 +81,7 @@ interface TasksState {
     addTask: (taskData: Omit<Task, 'id'>) => Promise<string>;
     updateTask: (userId: string, taskId: string, partial: Partial<Task>) => Promise<void>;
     updateTasksBulk: (userId: string, updates: Array<{ taskId: string; partial: Partial<Task> }>) => Promise<void>;
+    reorderTasks: (listId: string, orderedIds: string[]) => Promise<void>;
     deleteTask: (userId: string, taskId: string) => Promise<void>;
     clearError: () => void;
     
@@ -125,7 +128,15 @@ export const useTasksStore = create<TasksState>((set, get) => ({
     addTask: async (taskData) => {
         set({ isLoading: true, error: null });
         try {
-            const normalizedTask = normalizeTask(taskData as Task);
+            const baseTask = normalizeTask(taskData as Task) as Task & { order?: number };
+            // Asigna `order` manual si no viene: siguiente índice en la misma lista,
+            // para que el modo manual tenga órdenes estables desde el quick-add.
+            const normalizedTask: Task = {
+                ...baseTask,
+                order: Number.isFinite(baseTask.order)
+                    ? (baseTask.order as number)
+                    : pickNextOrder(get().tasks.filter((t) => t.listId === baseTask.listId)),
+            };
             const id = await taskRepository.createTask(normalizedTask);
             set((state) => ({ tasks: [{ ...normalizedTask, id }, ...state.tasks] }));
             return id;
@@ -254,6 +265,23 @@ export const useTasksStore = create<TasksState>((set, get) => ({
         }
     },
 
+    reorderTasks: async (listId, orderedIds) => {
+        const userId = useAuthStore.getState().userId;
+        if (!userId) return;
+
+        const currentTasks = get().tasks;
+        const updates = orderedIds
+            .map((taskId, index) => ({ taskId, partial: { order: index } }))
+            .filter(({ taskId }) =>
+                currentTasks.some((t) => t.id === taskId && t.listId === listId)
+            );
+
+        if (updates.length === 0) return;
+
+        // Patrón optimista + rollback de `updateTasksBulk` (no toca createdAt).
+        await get().updateTasksBulk(userId, updates);
+    },
+
     moveTaskStatus: async (userId, taskId, newStatus) => {
         const payload: Partial<Task> = { status: newStatus };
         if (newStatus === 'completed') {
@@ -294,13 +322,8 @@ export const useTasksStore = create<TasksState>((set, get) => ({
 
         const partial: Partial<Task> = { subtasks: updatedSubtasks };
 
-        // Auto-completar la tarea padre si todas las subtareas están completas
-        const allCompleted = updatedSubtasks.length > 0 && updatedSubtasks.every(s => s.completed);
-        if (allCompleted && task.status !== 'completed') {
-            partial.status = 'completed';
-            partial.completedAt = Date.now();
-        }
-
+        // El estado de la tarea principal es independiente de sus subtareas:
+        // no se auto-completa la tarea padre al completar todas las subtareas.
         await get().updateTask(userId, taskId, partial);
     },
 

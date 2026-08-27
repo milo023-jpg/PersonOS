@@ -7,6 +7,7 @@ const TodayView = lazy(() => import('../components/TaskList/TodayView'));
 const AllTasksView = lazy(() => import('../components/TaskList/AllTasksView'));
 const ListsView = lazy(() => import('../components/TaskList/ListsView'));
 const KanbanBoard = lazy(() => import('../components/TaskBoard/KanbanBoard'));
+const CalendarView = lazy(() => import('../Calendar/CalendarView'));
 
 import InlineTaskCreator from '../components/TaskList/InlineTaskCreator';
 import { GENERAL_LIST_ID } from '../../domain/constants/defaults';
@@ -15,7 +16,7 @@ import { logger } from '../../../../shared/utils/logger';
 import { useReminderSync } from '../../../../shared/hooks/useReminderSync';
 import { buildTaskReminders } from '../../application/services/taskReminder';
 
-type ViewMode = 'today' | 'all' | 'lists' | 'board';
+type ViewMode = 'today' | 'all' | 'lists' | 'board' | 'calendar';
 
 export default function TasksPageDesktop() {
     const { userId } = useAuthStore();
@@ -52,6 +53,7 @@ export default function TasksPageDesktop() {
         { id: 'all', label: '📋 Todas', count: tasks.filter(t => t.status !== 'completed').length },
         { id: 'lists', label: '🗂️ Listas', count: tasks.filter(t => t.listId === GENERAL_LIST_ID && t.status !== 'completed').length },
         { id: 'board', label: '🛹 Tablero', count: null },
+        { id: 'calendar', label: '📅 Calendario', count: null },
     ] as const, [tasks]);
 
     return (
@@ -73,10 +75,10 @@ export default function TasksPageDesktop() {
                         </button>
                     </div>
                 )}
-                <div className="flex items-center gap-6 border-b border-gray-200 dark:border-gray-800 pb-4 mb-6">
+                <div className="flex items-center flex-wrap gap-6 border-b border-gray-200 dark:border-gray-800 pb-4 mb-6">
                 <h1 className="text-2xl font-black text-text-primary tracking-tight shrink-0 mr-4">Tareas</h1>
 
-                <div className="flex bg-gray-100 dark:bg-surface p-1 rounded-xl gap-1">
+                <div className="flex flex-wrap bg-gray-100 dark:bg-surface p-1 rounded-xl gap-1">
                     {tabs.map(tab => (
                         <button
                             key={tab.id}
@@ -137,6 +139,7 @@ export default function TasksPageDesktop() {
                     {activeView === 'all' ? <AllTasksView onSelectTask={(t) => setSelectedTaskId(t.id)} /> : null}
                     {activeView === 'lists' ? <ListsView onSelectTask={(t) => setSelectedTaskId(t.id)} /> : null}
                     {activeView === 'board' ? <KanbanBoard onSelectTask={(t) => setSelectedTaskId(t.id)} /> : null}
+                    {activeView === 'calendar' ? <CalendarView /> : null}
                 </Suspense>
             </div>
 

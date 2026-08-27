@@ -1,25 +1,105 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { motion } from 'framer-motion';
 import { useAuthStore } from '../../../auth/application/store/authStore';
 import { useTasksStore } from '../../application/store/tasksStore';
 import { useTaskListsStore } from '../../application/store/taskListsStore';
 import { GENERAL_LIST_ID } from '../../domain/constants/defaults';
+import type { TaskList } from '../../domain/models/TaskList';
 import { useTasksMobileNavigation } from './MobileNavigationContext';
+import { useSortableSensors } from '../hooks/useSortableSensors';
 import InlineTaskCreator from '../components/TaskList/InlineTaskCreator';
 import CreateListModal from '../components/TaskList/CreateListModal';
+import { GripIcon, ListDragPreview } from '../components/TaskList/ListDragPreview';
 import { isDueBeforeOrToday, toTaskDateTimestamp } from '../../domain/utils/taskDate';
 import { useReminderSync } from '../../../../shared/hooks/useReminderSync';
 import { buildTaskReminders } from '../../application/services/taskReminder';
+import { DndContext, DragOverlay, closestCorners } from '@dnd-kit/core';
+import type { DragEndEvent, DragStartEvent } from '@dnd-kit/core';
+import { SortableContext, arrayMove, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
+
+function SortableListRow({ list, children }: { list: TaskList; children: (dragHandle: ReactNode) => ReactNode }) {
+    const { attributes, listeners, setNodeRef, setActivatorNodeRef, transform, transition, isDragging } = useSortable({
+        id: list.id,
+        data: { list },
+    });
+
+    const style = {
+        transform: CSS.Transform.toString(transform),
+        transition,
+        opacity: isDragging ? 0.5 : 1,
+        zIndex: isDragging ? 20 : undefined,
+    };
+
+    const dragHandle = (
+        <button
+            type="button"
+            ref={setActivatorNodeRef}
+            {...attributes}
+            {...listeners}
+            title="Arrastrar para reordenar"
+            aria-label={`Reordenar lista ${list.name}`}
+            className="text-text-secondary p-2.5 rounded-xl transition-colors cursor-grab active:cursor-grabbing touch-none shrink-0"
+        >
+            <GripIcon className="w-5 h-5" />
+        </button>
+    );
+
+    return (
+        <div ref={setNodeRef} style={style}>
+            {children(dragHandle)}
+        </div>
+    );
+}
 
 export default function TasksHomeMobile() {
     const { userId } = useAuthStore();
     const { tasks, fetchTasks } = useTasksStore();
-    const { lists, fetchLists } = useTaskListsStore();
+    const { lists, fetchLists, reorderListsTo } = useTaskListsStore();
     const { goToList } = useTasksMobileNavigation();
 
     const [isCreatorOpen, setIsCreatorOpen] = useState(false);
     const [isListCreatorOpen, setIsListCreatorOpen] = useState(false);
     const [creatorDate, setCreatorDate] = useState(() => Date.now());
+    const [activeList, setActiveList] = useState<TaskList | null>(null);
+
+    const sensors = useSortableSensors();
+
+    // La lista general queda siempre primero y no se arrastra.
+    const sortedLists = useMemo(() => {
+        const arr = [...lists];
+        arr.sort((a, b) => {
+            if (a.id === GENERAL_LIST_ID) return -1;
+            if (b.id === GENERAL_LIST_ID) return 1;
+            return ((a.order ?? Number.MAX_SAFE_INTEGER) - (b.order ?? Number.MAX_SAFE_INTEGER))
+                || (a.createdAt - b.createdAt);
+        });
+        return arr;
+    }, [lists]);
+
+    const sortableIds = useMemo(
+        () => sortedLists.filter(l => l.id !== GENERAL_LIST_ID).map(l => l.id),
+        [sortedLists]
+    );
+
+    const handleDragStart = (event: DragStartEvent) => {
+        setActiveList(event.active.data.current?.list ?? null);
+    };
+
+    const handleDragEnd = (event: DragEndEvent) => {
+        const { active, over } = event;
+        setActiveList(null);
+        if (!over || active.id === over.id || !userId) return;
+
+        const oldIndex = sortableIds.indexOf(String(active.id));
+        const newIndex = sortableIds.indexOf(String(over.id));
+        if (oldIndex === -1 || newIndex === -1) return;
+
+        const orderedIds = arrayMove(sortableIds, oldIndex, newIndex);
+
+        // Persistir el orden completo 1..n vía `reorderListsTo` (General queda 0).
+        void reorderListsTo(userId, orderedIds);
+    };
 
     useEffect(() => {
         if (userId) {
@@ -85,32 +165,53 @@ export default function TasksHomeMobile() {
                     </button>
                 </div>
                 <div className="space-y-2">
-                    {lists.map(list => {
-                        const listTasksCount = tasks.filter(t => t.listId === list.id && t.status !== 'completed').length;
-                        return (
-                            <button
-                                key={list.id}
-                                onClick={() => goToList('list', list.id)}
-                                className="w-full bg-surface border border-gray-200 dark:border-gray-700 rounded-xl p-4 flex items-center justify-between hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
-                            >
-                                <div className="flex items-center gap-3 min-w-0 flex-1">
-                                    <div className={`w-4 h-4 rounded-full ${list.color}`}></div>
-                                    <div className="flex items-center gap-2">
-                                        <span className="font-bold text-text-primary truncate">{list.name}</span>
-                                        {list.id === GENERAL_LIST_ID}
+                    <DndContext
+                        sensors={sensors}
+                        collisionDetection={closestCorners}
+                        onDragStart={handleDragStart}
+                        onDragEnd={handleDragEnd}
+                        onDragCancel={() => setActiveList(null)}
+                    >
+                        <SortableContext items={sortableIds} strategy={verticalListSortingStrategy}>
+                            {sortedLists.map(list => {
+                                const listTasksCount = tasks.filter(t => t.listId === list.id && t.status !== 'completed').length;
+
+                                const rowButton = (dragHandle?: ReactNode) => (
+                                    <div className="flex items-center gap-1 bg-surface border border-gray-200 dark:border-gray-700 rounded-xl hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
+                                        <button
+                                            onClick={() => goToList('list', list.id)}
+                                            className="flex-1 min-w-0 flex items-center justify-between px-4 py-4 text-left"
+                                        >
+                                            <div className="flex items-center gap-3 min-w-0 flex-1">
+                                                <div className={`w-4 h-4 rounded-full shrink-0 ${list.color}`}></div>
+                                                <span className="font-bold text-text-primary truncate">{list.name}</span>
+                                            </div>
+                                            <div className="flex items-center gap-2">
+                                                <span className="text-sm text-text-secondary bg-gray-100 dark:bg-gray-700 px-2 py-1 rounded-full">
+                                                    {listTasksCount}
+                                                </span>
+                                                <svg className="w-5 h-5 text-text-secondary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7"></path>
+                                                </svg>
+                                            </div>
+                                        </button>
+                                        {dragHandle}
                                     </div>
-                                </div>
-                                <div className="flex items-center gap-2">
-                                    <span className="text-sm text-text-secondary bg-gray-100 dark:bg-gray-700 px-2 py-1 rounded-full">
-                                        {listTasksCount}
-                                    </span>
-                                    <svg className="w-5 h-5 text-text-secondary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7"></path>
-                                    </svg>
-                                </div>
-                            </button>
-                        );
-                    })}
+                                );
+
+                                return list.id === GENERAL_LIST_ID
+                                    ? <div key={list.id}>{rowButton(undefined)}</div>
+                                    : (
+                                        <SortableListRow key={list.id} list={list}>
+                                            {(dragHandle) => rowButton(dragHandle)}
+                                        </SortableListRow>
+                                    );
+                            })}
+                        </SortableContext>
+                        <DragOverlay>
+                            {activeList ? <ListDragPreview list={activeList} /> : null}
+                        </DragOverlay>
+                    </DndContext>
                 </div>
                 <p className="mt-3 text-xs font-medium text-text-secondary">
                     General agrupa tareas sin una lista específica. {generalCount > 0 ? `${generalCount} activas por organizar.` : 'No hay tareas sin organizar.'}

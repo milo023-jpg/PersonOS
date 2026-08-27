@@ -8,10 +8,12 @@ import type {
   TaskPriority,
   TaskStatus,
 } from '../modules/tasks/domain/models/Task';
+import type { TaskList, TaskSortMode } from '../modules/tasks/domain/models/TaskList';
 
 const VALID_STATUSES: TaskStatus[] = ['todo', 'in_progress', 'completed', 'archived'];
 const VALID_PRIORITIES: TaskPriority[] = ['low', 'medium', 'high', 'urgent'];
 const VALID_RECURRENCE_TYPES: RecurrenceRule['type'][] = ['daily', 'weekly', 'monthly'];
+const VALID_SORT_MODES: TaskSortMode[] = ['manual', 'created_desc', 'due_asc'];
 
 export type TaskDocument = Partial<Task> & { id: string };
 
@@ -97,12 +99,86 @@ export function normalizeTaskDocument(task: TaskDocument, userId: string) {
     ...(asNumber(task.estimatedTime) !== undefined ? { estimatedTime: asNumber(task.estimatedTime) } : {}),
     ...(asNumber(task.actualTime) !== undefined ? { actualTime: asNumber(task.actualTime) } : {}),
     isImportant: asBoolean(task.isImportant) ?? false,
-    order: asNumber(task.order) ?? 0,
+    // Backfill de `order`: si falta, se usa createdAt como orden estable
+    // (las más nuevas quedan al final del modo manual).
+    order: asNumber(task.order) ?? asNumber(task.createdAt) ?? now,
     ...(asNonEmptyString(task.parentTaskId) ? { parentTaskId: asNonEmptyString(task.parentTaskId) } : {}),
     subtasks,
   };
 
   return normalizedTask;
+}
+
+export function normalizeTaskListDocument(list: TaskList, userId: string): Omit<TaskList, 'id'> {
+  const now = Date.now();
+  const taskSortMode = VALID_SORT_MODES.includes(list.taskSortMode as TaskSortMode)
+    ? (list.taskSortMode as TaskSortMode)
+    : 'manual';
+
+  return {
+    userId: asNonEmptyString(list.userId) ?? userId,
+    name: asNonEmptyString(list.name) ?? 'Untitled list',
+    color: asNonEmptyString(list.color) ?? 'bg-emerald-500',
+    order: asNumber(list.order) ?? asNumber(list.createdAt) ?? now,
+    createdAt: asNumber(list.createdAt) ?? now,
+    ...(typeof list.isDefault === 'boolean' ? { isDefault: list.isDefault } : {}),
+    ...(asNonEmptyString(list.defaultContextId) ? { defaultContextId: asNonEmptyString(list.defaultContextId) } : {}),
+    taskSortMode,
+  };
+}
+
+function taskListNeedsNormalization(list: TaskList, normalizedList: Omit<TaskList, 'id'>) {
+  return JSON.stringify(list) !== JSON.stringify({ id: list.id, ...normalizedList });
+}
+
+export async function normalizeTaskListsForUser(userId: string) {
+  if (!userId) {
+    throw new Error('normalizeTaskListsForUser requiere un userId válido.');
+  }
+
+  console.log(`Normalizando listas de tareas para el usuario: ${userId}`);
+
+  await ensureGeneralListExists(userId);
+
+  const listsRef = collection(db, `users/${userId}/taskLists`);
+  const snapshot = await getDocs(listsRef);
+
+  if (snapshot.empty) {
+    console.log('No hay listas para normalizar.');
+    return { scanned: 0, updated: 0 };
+  }
+
+  let updated = 0;
+  let scanned = 0;
+  let batch = writeBatch(db);
+  let batchOperations = 0;
+
+  for (const listDoc of snapshot.docs) {
+    scanned += 1;
+    const currentList = { id: listDoc.id, ...listDoc.data() } as TaskList;
+    const normalizedList = normalizeTaskListDocument(currentList, userId);
+
+    if (!taskListNeedsNormalization(currentList, normalizedList)) {
+      continue;
+    }
+
+    batch.set(doc(listsRef, listDoc.id), { id: listDoc.id, ...normalizedList });
+    batchOperations += 1;
+    updated += 1;
+
+    if (batchOperations === 400) {
+      await batch.commit();
+      batch = writeBatch(db);
+      batchOperations = 0;
+    }
+  }
+
+  if (batchOperations > 0) {
+    await batch.commit();
+  }
+
+  console.log(`Normalización de listas terminada. Revisadas: ${scanned}. Actualizadas: ${updated}.`);
+  return { scanned, updated };
 }
 
 function taskNeedsNormalization(task: TaskDocument, normalizedTask: Omit<Task, 'id'>) {
@@ -117,6 +193,7 @@ export async function normalizeTasksForUser(userId: string) {
   console.log(`Normalizando tareas para el usuario: ${userId}`);
 
   await ensureGeneralListExists(userId);
+  await normalizeTaskListsForUser(userId);
 
   const tasksRef = collection(db, `users/${userId}/tasks`);
   const snapshot = await getDocs(tasksRef);

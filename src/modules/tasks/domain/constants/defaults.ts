@@ -8,4 +8,5 @@ export const GENERAL_LIST: Omit<TaskList, 'userId' | 'createdAt'> = {
     color: 'bg-emerald-500',
     order: 0,
     isDefault: true,
+    taskSortMode: 'manual',
 };

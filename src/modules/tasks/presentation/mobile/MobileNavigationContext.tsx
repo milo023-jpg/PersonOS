@@ -1,6 +1,6 @@
 import { createContext, useContext, useState, type ReactNode } from 'react';
 
-type ViewType = 'home' | 'list';
+type ViewType = 'home' | 'list' | 'calendar';
 type FilterType = 'today' | 'all' | 'list';
 
 interface MobileNavigationState {
@@ -12,6 +12,7 @@ interface MobileNavigationState {
 interface MobileNavigationContextType extends MobileNavigationState {
     goToHome: () => void;
     goToList: (filter: FilterType, listId?: string) => void;
+    goToCalendar: () => void;
     goBack: () => void;
 }
 
@@ -31,12 +32,16 @@ export function MobileNavigationProvider({ children }: { children: ReactNode }) 
         setState({ view: 'list', filter, listId });
     };
 
+    const goToCalendar = () => {
+        setState({ view: 'calendar', filter: 'today' });
+    };
+
     const goBack = () => {
         setState({ view: 'home', filter: 'today' });
     };
 
     return (
-        <MobileNavigationContext.Provider value={{ ...state, goToHome, goToList, goBack }}>
+        <MobileNavigationContext.Provider value={{ ...state, goToHome, goToList, goToCalendar, goBack }}>
             {children}
         </MobileNavigationContext.Provider>
     );

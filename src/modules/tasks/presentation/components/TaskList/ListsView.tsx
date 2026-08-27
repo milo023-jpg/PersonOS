@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { useAuthStore } from '../../../../auth/application/store/authStore';
 import { useTasksStore } from '../../../application/store/tasksStore';
 import { useTaskListsStore } from '../../../application/store/taskListsStore';
@@ -6,25 +6,66 @@ import { useContextsStore } from '../../../../contexts/application/store/context
 import { GENERAL_LIST_ID } from '../../../domain/constants/defaults';
 import TaskItem from './TaskItem';
 import InlineTaskCreator from './InlineTaskCreator';
-import type { Task } from '../../../domain/models/Task';
+import { GripIcon, ListDragPreview } from './ListDragPreview';
 import { AnimatePresence, motion } from 'framer-motion';
+import type { Task } from '../../../domain/models/Task';
+import type { TaskList } from '../../../domain/models/TaskList';
+import { useSortableSensors } from '../../hooks/useSortableSensors';
+import { DndContext, DragOverlay, closestCorners } from '@dnd-kit/core';
+import type { DragEndEvent, DragStartEvent } from '@dnd-kit/core';
+import { SortableContext, arrayMove, rectSortingStrategy, useSortable } from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 import { SystemScrollArea } from '../../../../../shared/ui/SystemScrollArea';
 
 interface Props {
-  onSelectTask: (task: Task) => void;
+    onSelectTask: (task: Task) => void;
+}
+
+function SortableListCard({ list, children }: { list: TaskList; children: (dragHandle: ReactNode) => ReactNode }) {
+    const { attributes, listeners, setNodeRef, setActivatorNodeRef, transform, transition, isDragging } = useSortable({
+        id: list.id,
+        data: { list },
+    });
+
+    const style = {
+        transform: CSS.Transform.toString(transform),
+        transition,
+        opacity: isDragging ? 0.5 : 1,
+        zIndex: isDragging ? 20 : undefined,
+    };
+
+    const dragHandle = (
+        <button
+            type="button"
+            ref={setActivatorNodeRef}
+            {...attributes}
+            {...listeners}
+            title="Arrastrar para reordenar"
+            aria-label={`Reordenar lista ${list.name}`}
+            className="text-text-secondary hover:text-primary hover:bg-primary/10 p-1.5 rounded-lg transition-all cursor-grab active:cursor-grabbing touch-none shrink-0"
+        >
+            <GripIcon className="w-4 h-4" />
+        </button>
+    );
+
+    return (
+        <div ref={setNodeRef} style={style} className="h-full">
+            {children(dragHandle)}
+        </div>
+    );
 }
 
 export default function ListsView({ onSelectTask }: Props) {
     const { userId } = useAuthStore();
     const { tasks } = useTasksStore();
-    const { lists, fetchLists, createList, deleteList, updateList, reorderLists } = useTaskListsStore();
+    const { lists, fetchLists, createList, deleteList, updateList, reorderListsTo } = useTaskListsStore();
     const { contexts, fetchContexts } = useContextsStore();
-    
+
     const [isCreatingList, setIsCreatingList] = useState(false);
     const [newListName, setNewListName] = useState('');
     const [newListColor, setNewListColor] = useState('bg-blue-500');
     const [newListDefaultContext, setNewListDefaultContext] = useState<string>('');
-    
+
     // Estado para edición
     const [editingListId, setEditingListId] = useState<string | null>(null);
     const [editListName, setEditListName] = useState('');
@@ -35,6 +76,9 @@ export default function ListsView({ onSelectTask }: Props) {
     const [expandedLists, setExpandedLists] = useState<Record<string, boolean>>({});
     const [activeCreatorListId, setActiveCreatorListId] = useState<string | null>(null);
     const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
+    const [activeList, setActiveList] = useState<TaskList | null>(null);
+
+    const sensors = useSortableSensors();
 
     const toggleExpansion = (listId: string) => {
         setExpandedLists(prev => ({
@@ -50,17 +94,34 @@ export default function ListsView({ onSelectTask }: Props) {
         }
     }, [userId, fetchLists, fetchContexts]);
 
+    // La lista general queda siempre primero y no se arrastra; el resto va por `order`.
+    const sortedLists = useMemo(() => {
+        const arr = [...lists];
+        arr.sort((a, b) => {
+            if (a.id === GENERAL_LIST_ID) return -1;
+            if (b.id === GENERAL_LIST_ID) return 1;
+            return ((a.order ?? Number.MAX_SAFE_INTEGER) - (b.order ?? Number.MAX_SAFE_INTEGER))
+                || (a.createdAt - b.createdAt);
+        });
+        return arr;
+    }, [lists]);
+
+    const sortableIds = useMemo(
+        () => sortedLists.filter(l => l.id !== GENERAL_LIST_ID).map(l => l.id),
+        [sortedLists]
+    );
+
     const handleCreateList = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!userId || !newListName.trim()) return;
-        
+
         await createList(userId, {
             name: newListName.trim(),
             color: newListColor,
             order: lists.length,
             ...(newListDefaultContext ? { defaultContextId: newListDefaultContext } : {})
         });
-        
+
         setNewListName('');
         setNewListDefaultContext('');
         setIsCreatingList(false);
@@ -81,312 +142,338 @@ export default function ListsView({ onSelectTask }: Props) {
         setEditingListId(null);
     };
 
+    const handleDragStart = (event: DragStartEvent) => {
+        setActiveList(event.active.data.current?.list ?? null);
+    };
+
+    const handleDragEnd = (event: DragEndEvent) => {
+        const { active, over } = event;
+        setActiveList(null);
+        if (!over || active.id === over.id || !userId) return;
+
+        const oldIndex = sortableIds.indexOf(String(active.id));
+        const newIndex = sortableIds.indexOf(String(over.id));
+        if (oldIndex === -1 || newIndex === -1) return;
+
+        const orderedIds = arrayMove(sortableIds, oldIndex, newIndex);
+
+        // Persistir el orden completo 1..n vía `reorderListsTo` (la lista
+        // general queda siempre 0). Es optimista con rollback: el orden
+        // visual conmuta al instante y se respeta al recargar.
+        void reorderListsTo(userId, orderedIds);
+    };
+
     const colors = [
-        'bg-red-500', 'bg-orange-500', 'bg-amber-500', 'bg-yellow-500', 'bg-lime-500', 'bg-green-500', 
-        'bg-emerald-500', 'bg-teal-500', 'bg-cyan-500', 'bg-sky-500', 'bg-blue-500', 
+        'bg-red-500', 'bg-orange-500', 'bg-amber-500', 'bg-yellow-500', 'bg-lime-500', 'bg-green-500',
+        'bg-emerald-500', 'bg-teal-500', 'bg-cyan-500', 'bg-sky-500', 'bg-blue-500',
         'bg-indigo-500', 'bg-violet-500', 'bg-purple-500', 'bg-fuchsia-500', 'bg-pink-500', 'bg-rose-500',
         'bg-slate-500', 'bg-zinc-500', 'bg-stone-500'
     ];
 
-    return (
-        <SystemScrollArea className="w-full h-full flex flex-col">
-            <div className="mx-auto w-full max-w-7xl flex flex-col p-6 lg:px-8 gap-8 pb-24">
-            
-            <div className="flex items-center justify-between">
-                <div>
-                    <h2 className="text-xl font-black text-text-primary">Mis Listas</h2>
-                    <p className="text-sm font-medium text-text-secondary mt-1">
-                        Organiza tus tareas en listas personalizadas para tener mayor claridad.
-                    </p>
-                </div>
-                {!isCreatingList && (
-                    <button 
-                        onClick={() => setIsCreatingList(true)}
-                        className="bg-primary/10 text-primary hover:bg-primary/20 px-4 py-2 rounded-xl text-sm font-bold transition-colors flex items-center gap-2"
-                    >
-                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path></svg>
-                        Nueva Lista
-                    </button>
-                )}
-            </div>
+    const renderCard = (list: TaskList, dragHandle?: ReactNode) => {
+        const listTasks = tasks.filter(t => t.listId === list.id && t.status !== 'completed');
+        const isExpanded = !!expandedLists[list.id];
+        const displayedTasks = isExpanded ? listTasks : listTasks.slice(0, 4);
+        const isGeneralList = list.id === GENERAL_LIST_ID;
 
-            {isCreatingList && (
-                <form onSubmit={handleCreateList} className="bg-surface border border-gray-200 dark:border-white/5 rounded-2xl p-5 w-full shadow-sm">
-                    <input 
-                        autoFocus
-                        type="text" 
-                        value={newListName}
-                        onChange={(e) => setNewListName(e.target.value)}
-                        placeholder="Nombre de la lista..."
-                        className="w-full bg-transparent border-none focus:outline-none text-text-primary placeholder:text-gray-400 font-bold text-lg mb-4"
-                    />
-                    <div className="flex flex-col sm:flex-row gap-4 items-stretch sm:items-center">
-                        <div className="flex flex-col sm:flex-row gap-4 flex-1">
-                            {/* Color Selector */}
-                            <div className="flex flex-wrap gap-2 items-center flex-1">
-                                {colors.map(c => (
-                                    <button 
-                                        key={c}
-                                        type="button"
-                                        onClick={() => setNewListColor(c)}
-                                        className={`w-6 h-6 rounded-full cursor-pointer transition-all ${c} ${newListColor === c ? 'ring-2 ring-offset-2 ring-offset-surface ring-primary scale-110' : 'hover:scale-110 opacity-80 hover:opacity-100'}`}
-                                    />
-                                ))}
-                            </div>
-                            {/* Selector Contexto por defecto */}
-                            {contexts.length > 0 && (
-                                <select 
-                                    value={newListDefaultContext}
-                                    onChange={e => setNewListDefaultContext(e.target.value)}
-                                    className="bg-gray-50 dark:bg-background border border-gray-200 dark:border-transparent text-text-primary rounded-xl px-3 py-1.5 focus:border-primary outline-none text-sm w-full sm:w-48"
-                                >
-                                    <option value="">Sin contexto</option>
-                                    {contexts.map(c => (
-                                        <option key={c.id} value={c.id}>{c.icon} {c.name}</option>
-                                    ))}
-                                </select>
-                            )}
-                        </div>
-                        <div className="flex items-center justify-end shrink-0 gap-3">
-                            <button 
-                                type="button" 
-                                onClick={() => setIsCreatingList(false)}
-                                className="text-sm font-bold text-text-secondary hover:text-text-primary py-2 px-4"
-                            >
-                                Cancelar
-                            </button>
-                            <button 
-                                type="submit" 
-                                disabled={!newListName.trim()}
-                                className="bg-primary text-white text-sm font-bold py-2 px-5 rounded-xl disabled:opacity-50 hover:bg-primary/90 transition-colors"
-                            >
-                                Crear
-                            </button>
-                        </div>
-                    </div>
-                </form>
-            )}
-
-            {lists.length === 0 && !isCreatingList && (
-                <div className="flex flex-col items-center justify-center p-12 opacity-60">
-                     <span className="text-4xl mb-4">🗂️</span>
-                     <p className="font-bold text-text-primary text-lg">No tienes listas aún</p>
-                     <p className="text-sm text-text-secondary mt-1">Crea tu primera lista para organizar mejor tus tareas.</p>
-                </div>
-            )}
-
-            <div className="grid grid-cols-1 xl:grid-cols-2 gap-6 items-start">
-                {lists.map(list => {
-                    const listTasks = tasks.filter(t => t.listId === list.id && t.status !== 'completed');
-                    const isExpanded = !!expandedLists[list.id];
-                    const displayedTasks = isExpanded ? listTasks : listTasks.slice(0, 4);
-                    const isGeneralList = list.id === GENERAL_LIST_ID;
-                    
-                    return (
-                        <div key={list.id} className="bg-surface border border-gray-100 dark:border-white/5 rounded-3xl p-6 flex flex-col gap-5 shadow-[0_8px_30px_rgb(0,0,0,0.04)] dark:shadow-none transition-all">
-                            <div className="flex items-center justify-between group">
-                                {editingListId === list.id ? (
-                                    <div className="flex flex-col gap-3 w-full bg-white dark:bg-background p-4 rounded-2xl border border-gray-100 dark:border-white/5">
-                                        <input 
-                                            autoFocus
-                                            value={editListName}
-                                            onChange={e => setEditListName(e.target.value)}
-                                            className="w-full bg-transparent font-bold text-lg text-text-primary focus:outline-none"
-                                            placeholder="Nombre de la lista..."
+        return (
+            <div className="bg-surface border border-gray-100 dark:border-white/5 rounded-3xl p-6 flex flex-col gap-5 shadow-[0_8px_30px_rgb(0,0,0,0.04)] dark:shadow-none transition-all h-full">
+                <div className="flex items-center justify-between group">
+                    {editingListId === list.id ? (
+                        <div className="flex flex-col gap-3 w-full bg-white dark:bg-background p-4 rounded-2xl border border-gray-100 dark:border-white/5">
+                            <input
+                                autoFocus
+                                value={editListName}
+                                onChange={e => setEditListName(e.target.value)}
+                                className="w-full bg-transparent font-bold text-lg text-text-primary focus:outline-none"
+                                placeholder="Nombre de la lista..."
+                            />
+                            <div className="flex flex-col sm:flex-row gap-3">
+                                <div className="flex flex-wrap gap-2 items-center">
+                                    {colors.map(c => (
+                                        <button
+                                            key={c}
+                                            type="button"
+                                            onClick={() => setEditListColor(c)}
+                                            className={`w-5 h-5 rounded-full cursor-pointer transition-all ${c} ${editListColor === c ? 'ring-2 ring-offset-1 ring-offset-surface ring-primary scale-110' : 'hover:scale-110 opacity-80 hover:opacity-100'}`}
                                         />
-                                        <div className="flex flex-col sm:flex-row gap-3">
-                                            <div className="flex flex-wrap gap-2 items-center">
-                                                {colors.map(c => (
-                                                    <button 
-                                                        key={c}
-                                                        type="button"
-                                                        onClick={() => setEditListColor(c)}
-                                                        className={`w-5 h-5 rounded-full cursor-pointer transition-all ${c} ${editListColor === c ? 'ring-2 ring-offset-1 ring-offset-surface ring-primary scale-110' : 'hover:scale-110 opacity-80 hover:opacity-100'}`}
-                                                    />
-                                                ))}
-                                            </div>
-                                            {contexts.length > 0 && (
-                                                <select 
-                                                    value={editListContext}
-                                                    onChange={e => setEditListContext(e.target.value)}
-                                                    className="bg-gray-50 dark:bg-surface border border-gray-200 dark:border-transparent text-text-primary rounded-lg px-2 py-1 text-xs outline-none"
-                                                >
-                                                    <option value="">Sin contexto</option>
-                                                    {contexts.map(c => (
-                                                        <option key={c.id} value={c.id}>{c.icon} {c.name}</option>
-                                                    ))}
-                                                </select>
-                                            )}
-                                        </div>
-                                        <div className="flex justify-end gap-2 mt-2">
-                                            <button onClick={() => setEditingListId(null)} className="text-xs font-bold text-text-secondary hover:text-text-primary px-3 py-1.5">Cancelar</button>
-                                            <button onClick={() => handleUpdateList(list.id)} className="text-xs font-bold bg-primary text-white px-4 py-1.5 rounded-lg hover:bg-primary/90">Guardar</button>
-                                        </div>
-                                    </div>
-                                ) : (
+                                    ))}
+                                </div>
+                                {contexts.length > 0 && (
+                                    <select
+                                        value={editListContext}
+                                        onChange={e => setEditListContext(e.target.value)}
+                                        className="bg-gray-50 dark:bg-surface border border-gray-200 dark:border-transparent text-text-primary rounded-lg px-2 py-1 text-xs outline-none"
+                                    >
+                                        <option value="">Sin contexto</option>
+                                        {contexts.map(c => (
+                                            <option key={c.id} value={c.id}>{c.icon} {c.name}</option>
+                                        ))}
+                                    </select>
+                                )}
+                            </div>
+                            <div className="flex justify-end gap-2 mt-2">
+                                <button onClick={() => setEditingListId(null)} className="text-xs font-bold text-text-secondary hover:text-text-primary px-3 py-1.5">Cancelar</button>
+                                <button onClick={() => handleUpdateList(list.id)} className="text-xs font-bold bg-primary text-white px-4 py-1.5 rounded-lg hover:bg-primary/90">Guardar</button>
+                            </div>
+                        </div>
+                    ) : (
+                        <>
+                            <div className="flex items-center gap-3 min-w-0 flex-1">
+                                <div className="w-8 h-8 rounded-xl flex items-center justify-center bg-gray-50 dark:bg-white/5">
+                                    <div className={`w-3.5 h-3.5 rounded-full ${list.color}`}></div>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                    <h3 className="text-lg font-black text-text-primary tracking-tight truncate min-w-0">{list.name}</h3>
+                                </div>
+                            </div>
+                            <div className="flex items-center gap-2 shrink-0">
+                                {dragHandle}
+                                <span className="text-sm font-bold text-text-secondary bg-gray-100 dark:bg-white/5 px-2 py-1 rounded-lg">
+                                    {listTasks.length}
+                                </span>
+                                {!isGeneralList && (
                                     <>
-<div className="flex items-center gap-3 min-w-0 flex-1">
-                                            <div className="w-8 h-8 rounded-xl flex items-center justify-center bg-gray-50 dark:bg-white/5">
-                                                <div className={`w-3.5 h-3.5 rounded-full ${list.color}`}></div>
-                                            </div>
-                                            <div className="flex items-center gap-2">
-                                                <h3 className="text-lg font-black text-text-primary tracking-tight truncate min-w-0">{list.name}</h3>
-                                            </div>
-                                        </div>
-                                        <div className="flex items-center gap-2 shrink-0">
-                                            <span className="text-sm font-bold text-text-secondary bg-gray-100 dark:bg-white/5 px-2 py-1 rounded-lg">
-                                                {listTasks.length}
-                                            </span>
-                                            <button 
-                                                onClick={() => reorderLists(userId!, list.id, 'up')}
-                                                disabled={lists.findIndex(l => l.id === list.id) === 0}
-                                                className="text-text-secondary hover:text-primary hover:bg-primary/10 p-1.5 rounded-lg transition-all md:opacity-0 md:group-hover:opacity-100 disabled:opacity-30 disabled:cursor-not-allowed"
-                                                title="Mover arriba"
-                                            >
-                                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 15l7-7 7 7"></path></svg>
-                                            </button>
-                                            <button 
-                                                onClick={() => reorderLists(userId!, list.id, 'down')}
-                                                disabled={lists.findIndex(l => l.id === list.id) === lists.length - 1}
-                                                className="text-text-secondary hover:text-primary hover:bg-primary/10 p-1.5 rounded-lg transition-all md:opacity-0 md:group-hover:opacity-100 disabled:opacity-30 disabled:cursor-not-allowed"
-                                                title="Mover abajo"
-                                            >
-                                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path></svg>
-                                            </button>
-                                            {!isGeneralList && (
-                                                <>
-                                                    <button 
-                                                        onClick={() => {
-                                                            setEditingListId(list.id);
-                                                            setEditListName(list.name);
-                                                            setEditListColor(list.color);
-                                                            setEditListContext(list.defaultContextId || '');
-                                                        }}
-                                                        className="text-text-secondary hover:text-primary hover:bg-primary/10 p-1.5 rounded-lg transition-all md:opacity-0 md:group-hover:opacity-100"
-                                                        title="Editar lista"
-                                                    >
-                                                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"></path></svg>
-                                                    </button>
-                                                    <button 
-                                                        onClick={() => handleDeleteList(list.id)}
-                                                        className="text-red-500 hover:bg-red-500/10 p-1.5 rounded-lg transition-all md:opacity-0 md:group-hover:opacity-100"
-                                                        title="Eliminar lista"
-                                                    >
-                                                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
-                                                    </button>
-                                                </>
-                                            )}
-                                        </div>
+                                        <button
+                                            onClick={() => {
+                                                setEditingListId(list.id);
+                                                setEditListName(list.name);
+                                                setEditListColor(list.color);
+                                                setEditListContext(list.defaultContextId || '');
+                                            }}
+                                            className="text-text-secondary hover:text-primary hover:bg-primary/10 p-1.5 rounded-lg transition-all md:opacity-0 md:group-hover:opacity-100"
+                                            title="Editar lista"
+                                        >
+                                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"></path></svg>
+                                        </button>
+                                        <button
+                                            onClick={() => handleDeleteList(list.id)}
+                                            className="text-red-500 hover:bg-red-500/10 p-1.5 rounded-lg transition-all md:opacity-0 md:group-hover:opacity-100"
+                                            title="Eliminar lista"
+                                        >
+                                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+                                        </button>
                                     </>
                                 )}
                             </div>
-                            
-                            <div className="flex flex-col gap-2">
-                                <AnimatePresence mode="popLayout">
-                                    {listTasks.length === 0 ? (
-                                        <motion.div 
-                                            key={`empty-${list.id}`}
-                                            initial={{ opacity: 0 }}
-                                            animate={{ opacity: 1 }}
-                                            exit={{ opacity: 0 }}
-                                            className="py-10 flex flex-col items-center justify-center"
-                                        >
-                                            <p className="text-sm font-bold text-gray-400/80">Todo completo en esta lista. 🎉</p>
-                                        </motion.div>
-                                    ) : (
-                                        <>
-                                            {/* 1. Lista de tareas (4 o todas según isExpanded) */}
-                                            {displayedTasks.map(task => (
-                                                <motion.div 
-                                                    key={task.id}
-                                                    initial={{ opacity: 0, y: 10 }}
-                                                    animate={{ opacity: 1, y: 0 }}
-                                                    exit={{ opacity: 0, y: -10 }}
-                                                    className="w-full"
-                                                >
-                                                    {task.id === editingTaskId ? (
-                                                        <InlineTaskCreator editTask={task} onCancel={() => setEditingTaskId(null)} />
-                                                    ) : (
-                                                        <TaskItem
-                                                            task={task}
-                                                            onSelect={(selectedTask) => {
-                                                                setEditingTaskId(selectedTask.id);
-                                                                onSelectTask(selectedTask);
-                                                            }}
-                                                            bgClass="bg-gray-50 dark:bg-background"
-                                                        />
-                                                    )}
-                                                </motion.div>
-                                            ))}
+                        </>
+                    )}
+                </div>
 
-                                            {/* 2. Control de Expansión (Solo si hay más de 4 tareas) */}
-                                            {!isExpanded && listTasks.length > 4 && (
-                                                <motion.div 
-                                                    key={`expand-${list.id}`}
-                                                    initial={{ opacity: 0 }}
-                                                    animate={{ opacity: 1 }}
-                                                    exit={{ opacity: 0 }}
-                                                    className="w-full text-center mt-2"
-                                                >
-                                                    <button 
-                                                        onClick={(e) => {
-                                                            e.stopPropagation();
-                                                            toggleExpansion(list.id);
-                                                        }}
-                                                        className="w-full py-2 bg-gray-50 dark:bg-white/5 rounded-xl text-xs font-bold text-text-secondary hover:text-primary hover:bg-gray-100 dark:hover:bg-white/10 transition-colors shadow-sm"
-                                                    >
-                                                        + {listTasks.length - 4} tareas más
-                                                    </button>
-                                                </motion.div>
-                                            )}
-
-                                            {isExpanded && listTasks.length > 4 && (
-                                                <motion.div 
-                                                    key={`hide-${list.id}`}
-                                                    initial={{ opacity: 0 }}
-                                                    animate={{ opacity: 1 }}
-                                                    exit={{ opacity: 0 }}
-                                                    className="w-full text-center mt-2"
-                                                >
-                                                    <button 
-                                                        onClick={(e) => {
-                                                            e.stopPropagation();
-                                                            toggleExpansion(list.id);
-                                                        }}
-                                                        className="w-full py-2 bg-gray-50 dark:bg-white/5 rounded-xl text-xs font-bold text-text-secondary hover:text-primary hover:bg-gray-100 dark:hover:bg-white/10 transition-colors shadow-sm"
-                                                    >
-                                                        Ocultar tareas
-                                                    </button>
-                                                </motion.div>
-                                            )}
-                                        </>
-                                    )}
-
-                                    {/* 3. Botón de Añadir Tarea (Siempre al final de todo el bloque, sea lista vacía o llena) */}
-                                    <motion.div key={`add-btn-${list.id}`} layout className="w-full">
-                                        {activeCreatorListId === list.id ? (
-                                            <div className="mt-3">
-                                                <InlineTaskCreator 
-                                                    defaultListId={list.id}
-                                                    onCancel={() => setActiveCreatorListId(null)}
-                                                />
-                                            </div>
+                <div className="flex flex-col gap-2">
+                    <AnimatePresence mode="popLayout">
+                        {listTasks.length === 0 ? (
+                            <motion.div
+                                key={`empty-${list.id}`}
+                                initial={{ opacity: 0 }}
+                                animate={{ opacity: 1 }}
+                                exit={{ opacity: 0 }}
+                                className="py-10 flex flex-col items-center justify-center"
+                            >
+                                <p className="text-sm font-bold text-gray-400/80">Todo completo en esta lista. 🎉</p>
+                            </motion.div>
+                        ) : (
+                            <>
+                                {displayedTasks.map(task => (
+                                    <motion.div
+                                        key={task.id}
+                                        initial={{ opacity: 0, y: 10 }}
+                                        animate={{ opacity: 1, y: 0 }}
+                                        exit={{ opacity: 0, y: -10 }}
+                                        className="w-full"
+                                    >
+                                        {task.id === editingTaskId ? (
+                                            <InlineTaskCreator editTask={task} onCancel={() => setEditingTaskId(null)} />
                                         ) : (
-                                            <button 
-                                                onClick={() => setActiveCreatorListId(list.id)}
-                                                className="w-full text-left py-2.5 px-3 mt-2 rounded-xl text-text-secondary/60 hover:text-primary font-bold transition-all flex items-center gap-2 hover:bg-gray-50 dark:hover:bg-white/5 group border border-dashed border-transparent hover:border-primary/20"
-                                            >
-                                                <svg className="w-5 h-5 text-primary opacity-50 group-hover:opacity-100 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path></svg>
-                                                <span className="text-sm tracking-tight">Añadir tarea</span>
-                                            </button>
+                                            <TaskItem
+                                                task={task}
+                                                onSelect={(selectedTask) => {
+                                                    setEditingTaskId(selectedTask.id);
+                                                    onSelectTask(selectedTask);
+                                                }}
+                                                bgClass="bg-gray-50 dark:bg-background"
+                                            />
                                         )}
                                     </motion.div>
-                                </AnimatePresence>
+                                ))}
+
+                                {!isExpanded && listTasks.length > 4 && (
+                                    <motion.div
+                                        key={`expand-${list.id}`}
+                                        initial={{ opacity: 0 }}
+                                        animate={{ opacity: 1 }}
+                                        exit={{ opacity: 0 }}
+                                        className="w-full text-center mt-2"
+                                    >
+                                        <button
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                toggleExpansion(list.id);
+                                            }}
+                                            className="w-full py-2 bg-gray-50 dark:bg-white/5 rounded-xl text-xs font-bold text-text-secondary hover:text-primary hover:bg-gray-100 dark:hover:bg-white/10 transition-colors shadow-sm"
+                                        >
+                                            + {listTasks.length - 4} tareas más
+                                        </button>
+                                    </motion.div>
+                                )}
+
+                                {isExpanded && listTasks.length > 4 && (
+                                    <motion.div
+                                        key={`hide-${list.id}`}
+                                        initial={{ opacity: 0 }}
+                                        animate={{ opacity: 1 }}
+                                        exit={{ opacity: 0 }}
+                                        className="w-full text-center mt-2"
+                                    >
+                                        <button
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                toggleExpansion(list.id);
+                                            }}
+                                            className="w-full py-2 bg-gray-50 dark:bg-white/5 rounded-xl text-xs font-bold text-text-secondary hover:text-primary hover:bg-gray-100 dark:hover:bg-white/10 transition-colors shadow-sm"
+                                        >
+                                            Ocultar tareas
+                                        </button>
+                                    </motion.div>
+                                )}
+                            </>
+                        )}
+
+                        <motion.div key={`add-btn-${list.id}`} layout className="w-full">
+                            {activeCreatorListId === list.id ? (
+                                <div className="mt-3">
+                                    <InlineTaskCreator
+                                        defaultListId={list.id}
+                                        onCancel={() => setActiveCreatorListId(null)}
+                                    />
+                                </div>
+                            ) : (
+                                <button
+                                    onClick={() => setActiveCreatorListId(list.id)}
+                                    className="w-full text-left py-2.5 px-3 mt-2 rounded-xl text-text-secondary/60 hover:text-primary font-bold transition-all flex items-center gap-2 hover:bg-gray-50 dark:hover:bg-white/5 group border border-dashed border-transparent hover:border-primary/20"
+                                >
+                                    <svg className="w-5 h-5 text-primary opacity-50 group-hover:opacity-100 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path></svg>
+                                    <span className="text-sm tracking-tight">Añadir tarea</span>
+                                </button>
+                            )}
+                        </motion.div>
+                    </AnimatePresence>
+                </div>
+            </div>
+        );
+    };
+
+    return (
+        <SystemScrollArea className="w-full h-full flex flex-col">
+            <div className="mx-auto w-full max-w-7xl flex flex-col p-6 lg:px-8 gap-8 pb-24">
+
+                <div className="flex items-center justify-between">
+                    <div>
+                        <h2 className="text-xl font-black text-text-primary">Mis Listas</h2>
+                        <p className="text-sm font-medium text-text-secondary mt-1">
+                            Organiza tus tareas en listas personalizadas para tener mayor claridad. Arrastra el icono ☰ para reordenar.
+                        </p>
+                    </div>
+                    {!isCreatingList && (
+                        <button
+                            onClick={() => setIsCreatingList(true)}
+                            className="bg-primary/10 text-primary hover:bg-primary/20 px-4 py-2 rounded-xl text-sm font-bold transition-colors flex items-center gap-2"
+                        >
+                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path></svg>
+                            Nueva Lista
+                        </button>
+                    )}
+                </div>
+
+                {isCreatingList && (
+                    <form onSubmit={handleCreateList} className="bg-surface border border-gray-200 dark:border-white/5 rounded-2xl p-5 w-full shadow-sm">
+                        <input
+                            autoFocus
+                            type="text"
+                            value={newListName}
+                            onChange={(e) => setNewListName(e.target.value)}
+                            placeholder="Nombre de la lista..."
+                            className="w-full bg-transparent border-none focus:outline-none text-text-primary placeholder:text-gray-400 font-bold text-lg mb-4"
+                        />
+                        <div className="flex flex-col sm:flex-row gap-4 items-stretch sm:items-center">
+                            <div className="flex flex-col sm:flex-row gap-4 flex-1">
+                                {/* Color Selector */}
+                                <div className="flex flex-wrap gap-2 items-center flex-1">
+                                    {colors.map(c => (
+                                        <button
+                                            key={c}
+                                            type="button"
+                                            onClick={() => setNewListColor(c)}
+                                            className={`w-6 h-6 rounded-full cursor-pointer transition-all ${c} ${newListColor === c ? 'ring-2 ring-offset-2 ring-offset-surface ring-primary scale-110' : 'hover:scale-110 opacity-80 hover:opacity-100'}`}
+                                        />
+                                    ))}
+                                </div>
+                                {/* Selector Contexto por defecto */}
+                                {contexts.length > 0 && (
+                                    <select
+                                        value={newListDefaultContext}
+                                        onChange={e => setNewListDefaultContext(e.target.value)}
+                                        className="bg-gray-50 dark:bg-background border border-gray-200 dark:border-transparent text-text-primary rounded-xl px-3 py-1.5 focus:border-primary outline-none text-sm w-full sm:w-48"
+                                    >
+                                        <option value="">Sin contexto</option>
+                                        {contexts.map(c => (
+                                            <option key={c.id} value={c.id}>{c.icon} {c.name}</option>
+                                        ))}
+                                    </select>
+                                )}
+                            </div>
+                            <div className="flex items-center justify-end shrink-0 gap-3">
+                                <button
+                                    type="button"
+                                    onClick={() => setIsCreatingList(false)}
+                                    className="text-sm font-bold text-text-secondary hover:text-text-primary py-2 px-4"
+                                >
+                                    Cancelar
+                                </button>
+                                <button
+                                    type="submit"
+                                    disabled={!newListName.trim()}
+                                    className="bg-primary text-white text-sm font-bold py-2 px-5 rounded-xl disabled:opacity-50 hover:bg-primary/90 transition-colors"
+                                >
+                                    Crear
+                                </button>
                             </div>
                         </div>
-                    );
-                })}
-            </div>
+                    </form>
+                )}
+
+                {lists.length === 0 && !isCreatingList && (
+                    <div className="flex flex-col items-center justify-center p-12 opacity-60">
+                        <span className="text-4xl mb-4">🗂️</span>
+                        <p className="font-bold text-text-primary text-lg">No tienes listas aún</p>
+                        <p className="text-sm text-text-secondary mt-1">Crea tu primera lista para organizar mejor tus tareas.</p>
+                    </div>
+                )}
+
+                <DndContext
+                    sensors={sensors}
+                    collisionDetection={closestCorners}
+                    onDragStart={handleDragStart}
+                    onDragEnd={handleDragEnd}
+                    onDragCancel={() => setActiveList(null)}
+                >
+                    <SortableContext items={sortableIds} strategy={rectSortingStrategy}>
+                        <div className="grid grid-cols-1 xl:grid-cols-2 gap-6 items-start">
+                            {sortedLists.map(list => (
+                                list.id === GENERAL_LIST_ID
+                                    ? <div key={list.id}>{renderCard(list, undefined)}</div>
+                                    : (
+                                        <SortableListCard key={list.id} list={list}>
+                                            {(dragHandle) => renderCard(list, dragHandle)}
+                                        </SortableListCard>
+                                    )
+                            ))}
+                        </div>
+                    </SortableContext>
+                    <DragOverlay>
+                        {activeList ? <ListDragPreview list={activeList} /> : null}
+                    </DragOverlay>
+                </DndContext>
             </div>
         </SystemScrollArea>
     );
