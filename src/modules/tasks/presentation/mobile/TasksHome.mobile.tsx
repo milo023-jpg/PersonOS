@@ -9,7 +9,7 @@ import { useTasksMobileNavigation } from './MobileNavigationContext';
 import { useSortableSensors } from '../hooks/useSortableSensors';
 import InlineTaskCreator from '../components/TaskList/InlineTaskCreator';
 import CreateListModal from '../components/TaskList/CreateListModal';
-import { GripIcon, ListDragPreview } from '../components/TaskList/ListDragPreview';
+import { ListDragPreview } from '../components/TaskList/ListDragPreview';
 import { isDueBeforeOrToday, toTaskDateTimestamp } from '../../domain/utils/taskDate';
 import { useReminderSync } from '../../../../shared/hooks/useReminderSync';
 import { buildTaskReminders } from '../../application/services/taskReminder';
@@ -18,7 +18,7 @@ import type { DragEndEvent, DragStartEvent } from '@dnd-kit/core';
 import { SortableContext, arrayMove, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 
-function SortableListRow({ list, children }: { list: TaskList; children: (dragHandle: ReactNode) => ReactNode }) {
+function SortableListRow({ list, children }: { list: TaskList; children: ReactNode }) {
     const { attributes, listeners, setNodeRef, setActivatorNodeRef, transform, transition, isDragging } = useSortable({
         id: list.id,
         data: { list },
@@ -31,23 +31,11 @@ function SortableListRow({ list, children }: { list: TaskList; children: (dragHa
         zIndex: isDragging ? 20 : undefined,
     };
 
-    const dragHandle = (
-        <button
-            type="button"
-            ref={setActivatorNodeRef}
-            {...attributes}
-            {...listeners}
-            title="Arrastrar para reordenar"
-            aria-label={`Reordenar lista ${list.name}`}
-            className="text-text-secondary p-2.5 rounded-xl transition-colors cursor-grab active:cursor-grabbing touch-none shrink-0"
-        >
-            <GripIcon className="w-5 h-5" />
-        </button>
-    );
-
     return (
-        <div ref={setNodeRef} style={style}>
-            {children(dragHandle)}
+        <div ref={setNodeRef} style={style} className="cursor-grab active:cursor-grabbing">
+            <div ref={setActivatorNodeRef} {...attributes} {...listeners}>
+                {children}
+            </div>
         </div>
     );
 }
@@ -176,7 +164,7 @@ export default function TasksHomeMobile() {
                             {sortedLists.map(list => {
                                 const listTasksCount = tasks.filter(t => t.listId === list.id && t.status !== 'completed').length;
 
-                                const rowButton = (dragHandle?: ReactNode) => (
+                                const rowButton = () => (
                                     <div className="flex items-center gap-1 bg-surface border border-gray-200 dark:border-gray-700 rounded-xl hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
                                         <button
                                             onClick={() => goToList('list', list.id)}
@@ -195,15 +183,14 @@ export default function TasksHomeMobile() {
                                                 </svg>
                                             </div>
                                         </button>
-                                        {dragHandle}
                                     </div>
                                 );
 
                                 return list.id === GENERAL_LIST_ID
-                                    ? <div key={list.id}>{rowButton(undefined)}</div>
+                                    ? <div key={list.id}>{rowButton()}</div>
                                     : (
                                         <SortableListRow key={list.id} list={list}>
-                                            {(dragHandle) => rowButton(dragHandle)}
+                                            {rowButton()}
                                         </SortableListRow>
                                     );
                             })}

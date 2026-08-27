@@ -6,7 +6,7 @@ import { useContextsStore } from '../../../../contexts/application/store/context
 import { GENERAL_LIST_ID } from '../../../domain/constants/defaults';
 import TaskItem from './TaskItem';
 import InlineTaskCreator from './InlineTaskCreator';
-import { GripIcon, ListDragPreview } from './ListDragPreview';
+import { ListDragPreview } from './ListDragPreview';
 import { AnimatePresence, motion } from 'framer-motion';
 import type { Task } from '../../../domain/models/Task';
 import type { TaskList } from '../../../domain/models/TaskList';
@@ -21,7 +21,7 @@ interface Props {
     onSelectTask: (task: Task) => void;
 }
 
-function SortableListCard({ list, children }: { list: TaskList; children: (dragHandle: ReactNode) => ReactNode }) {
+function SortableListCard({ list, children }: { list: TaskList; children: ReactNode }) {
     const { attributes, listeners, setNodeRef, setActivatorNodeRef, transform, transition, isDragging } = useSortable({
         id: list.id,
         data: { list },
@@ -34,23 +34,11 @@ function SortableListCard({ list, children }: { list: TaskList; children: (dragH
         zIndex: isDragging ? 20 : undefined,
     };
 
-    const dragHandle = (
-        <button
-            type="button"
-            ref={setActivatorNodeRef}
-            {...attributes}
-            {...listeners}
-            title="Arrastrar para reordenar"
-            aria-label={`Reordenar lista ${list.name}`}
-            className="text-text-secondary hover:text-primary hover:bg-primary/10 p-1.5 rounded-lg transition-all cursor-grab active:cursor-grabbing touch-none shrink-0"
-        >
-            <GripIcon className="w-4 h-4" />
-        </button>
-    );
-
     return (
         <div ref={setNodeRef} style={style} className="h-full">
-            {children(dragHandle)}
+            <div ref={setActivatorNodeRef} {...attributes} {...listeners} className="h-full cursor-grab active:cursor-grabbing">
+                {children}
+            </div>
         </div>
     );
 }
@@ -170,7 +158,7 @@ export default function ListsView({ onSelectTask }: Props) {
         'bg-slate-500', 'bg-zinc-500', 'bg-stone-500'
     ];
 
-    const renderCard = (list: TaskList, dragHandle?: ReactNode) => {
+    const renderCard = (list: TaskList) => {
         const listTasks = tasks.filter(t => t.listId === list.id && t.status !== 'completed');
         const isExpanded = !!expandedLists[list.id];
         const displayedTasks = isExpanded ? listTasks : listTasks.slice(0, 4);
@@ -228,7 +216,6 @@ export default function ListsView({ onSelectTask }: Props) {
                                 </div>
                             </div>
                             <div className="flex items-center gap-2 shrink-0">
-                                {dragHandle}
                                 <span className="text-sm font-bold text-text-secondary bg-gray-100 dark:bg-white/5 px-2 py-1 rounded-lg">
                                     {listTasks.length}
                                 </span>
@@ -371,7 +358,7 @@ export default function ListsView({ onSelectTask }: Props) {
                     <div>
                         <h2 className="text-xl font-black text-text-primary">Mis Listas</h2>
                         <p className="text-sm font-medium text-text-secondary mt-1">
-                            Organiza tus tareas en listas personalizadas para tener mayor claridad. Arrastra el icono ☰ para reordenar.
+                            Organiza tus tareas en listas personalizadas para tener mayor claridad. Mantén presionada una lista para reordenar.
                         </p>
                     </div>
                     {!isCreatingList && (
@@ -461,11 +448,11 @@ export default function ListsView({ onSelectTask }: Props) {
                         <div className="grid grid-cols-1 xl:grid-cols-2 gap-6 items-start">
                             {sortedLists.map(list => (
                                 list.id === GENERAL_LIST_ID
-                                    ? <div key={list.id}>{renderCard(list, undefined)}</div>
+                                    ? <div key={list.id}>{renderCard(list)}</div>
                                     : (
-                                        <SortableListCard key={list.id} list={list}>
-                                            {(dragHandle) => renderCard(list, dragHandle)}
-                                        </SortableListCard>
+<SortableListCard key={list.id} list={list}>
+                            {renderCard(list)}
+                        </SortableListCard>
                                     )
                             ))}
                         </div>
