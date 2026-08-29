@@ -1,8 +1,6 @@
-import { memo, useMemo } from 'react';
-import type { Task, TaskStatus } from '../../../domain/models/Task';
-import { getDayRange } from '../../../domain/utils/taskDate';
+import { memo } from 'react';
+import type { Task } from '../../../domain/models/Task';
 import { useTaskListsStore } from '../../../application/store/taskListsStore';
-import { isOverdue } from '../taskCalendarUtils';
 
 interface Props {
     task: Task;
@@ -12,38 +10,14 @@ interface Props {
     onMenu?: (task: Task) => void;
 }
 
-const STATUS_LABEL: Record<TaskStatus, string> = {
-    todo: 'Por hacer',
-    in_progress: 'En curso',
-    completed: 'Hecho',
-    archived: 'Archivada',
-};
-
-const STATUS_STYLES: Record<TaskStatus, string> = {
-    todo: 'bg-primary/15 text-primary',
-    in_progress: 'bg-warning/15 text-warning',
-    completed: 'bg-success/15 text-success',
-    archived: 'bg-gray-100 dark:bg-gray-800 text-text-secondary',
-};
-
 const TaskCard = memo(function TaskCard({ task, listColor, listName, onOpen, onMenu }: Props) {
     const { lists } = useTaskListsStore();
-    const todayStart = useMemo(() => getDayRange().start, []);
 
     const list = task.listId ? lists.find((l) => l.id === task.listId) : null;
     const colorClass = listColor ?? list?.color ?? 'bg-gray-200 dark:bg-gray-700';
     const name = listName ?? list?.name ?? 'General';
 
     const completed = task.status === 'completed';
-    const overdue = !completed && isOverdue(task, todayStart);
-
-    const subtasks = task.subtasks ?? [];
-    const total = subtasks.length;
-    const done = subtasks.filter((s) => s.completed).length;
-    const progress = total > 0 ? Math.round((done / total) * 100) : 0;
-
-    const badgeStyle = overdue ? 'bg-danger/15 text-danger' : STATUS_STYLES[task.status];
-    const badgeLabel = overdue ? 'Atrasada' : STATUS_LABEL[task.status];
 
     return (
         <div
@@ -56,27 +30,12 @@ const TaskCard = memo(function TaskCard({ task, listColor, listName, onOpen, onM
                     onOpen?.(task);
                 }
             }}
-            className={`relative rounded-2xl border px-3 pt-4 pb-2.5 flex items-start gap-2.5 transition-all cursor-pointer select-none ${
+            className={`relative rounded-2xl border px-3 pt-3 pb-2.5 flex items-start gap-2.5 transition-all cursor-pointer select-none ${
                 completed
                     ? 'opacity-60 border-transparent'
                     : 'border-gray-100 dark:border-gray-800 bg-surface shadow-sm hover:border-primary/40 hover:shadow-md'
             }`}
         >
-            <span
-                className={`absolute -top-2 left-3 rounded-b-xl rounded-t-md px-2 py-0.5 inline-flex items-center text-[10px] font-black uppercase tracking-wider ${badgeStyle}`}
-            >
-                {badgeLabel}
-            </span>
-
-            <div className="absolute -top-2 right-3 min-w-[34px] flex flex-col items-end gap-0.5">
-                <span className={`text-[9px] font-black leading-none tabular-nums ${total > 0 ? 'text-primary' : 'text-text-secondary'}`}>
-                    {progress}%
-                </span>
-                <div className="h-0.5 w-full rounded-full bg-gray-200 dark:bg-gray-700 overflow-hidden">
-                    <div className="h-full rounded-full bg-primary transition-all" style={{ width: `${progress}%` }} />
-                </div>
-            </div>
-
             <div className={`shrink-0 w-9 h-9 rounded-xl flex items-center justify-center text-white ${colorClass}`}>
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path

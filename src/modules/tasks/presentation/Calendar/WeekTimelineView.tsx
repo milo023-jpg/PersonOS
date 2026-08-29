@@ -7,10 +7,11 @@ import { sortTasksForCalendar, tasksForDay } from './taskCalendarUtils';
 import CalendarHeader from './viewComponents/CalendarHeader';
 import MiniTaskChip from './viewComponents/MiniTaskChip';
 import { groupTasksByHour } from './viewComponents/TimelineColumn';
-import { isAllDayTask } from './viewComponents/TimelineItem';
+import { isAllDayTask, taskHour } from './viewComponents/TimelineItem';
 import CalendarTaskOverlays from './CalendarTaskOverlays';
+import { CALENDAR_HOURS, CALENDAR_START_HOUR } from './calendarDateUtils';
 
-const HOURS = Array.from({ length: 24 }, (_, index) => index);
+const HOURS = CALENDAR_HOURS;
 
 const MAX_CHIPS = 3;
 
@@ -32,8 +33,12 @@ export default function WeekTimelineView() {
         () =>
             days.map((day) => {
                 const dayTasks = sortTasksForCalendar(tasksForDay(tasks, day));
-                const timed = dayTasks.filter((task) => !isAllDayTask(task));
-                const allDay = dayTasks.filter((task) => isAllDayTask(task));
+                const timed = dayTasks.filter(
+                    (task) => !isAllDayTask(task) && taskHour(task) >= CALENDAR_START_HOUR,
+                );
+                const allDay = dayTasks.filter(
+                    (task) => isAllDayTask(task) || taskHour(task) < CALENDAR_START_HOUR,
+                );
                 const colors = new Map<string, string | undefined>();
                 for (const task of timed) {
                     const list = task.listId ? lists.find((l) => l.id === task.listId) : null;

@@ -1,5 +1,16 @@
 export const WEEKDAY_LABELS_SHORT = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'] as const;
 
+// El día visible en las vistas de calendario (día y semana) arranca a las 7:00.
+export const CALENDAR_START_HOUR = 7;
+// El día visible termina en la fila de las 23:00 (mantiene el cierre actual del grid).
+export const CALENDAR_END_HOUR = 23;
+
+// Horas renderizadas en las vistas con franja horaria (no incluye el mes).
+export const CALENDAR_HOURS: number[] = Array.from(
+    { length: CALENDAR_END_HOUR - CALENDAR_START_HOUR + 1 },
+    (_, index) => index + CALENDAR_START_HOUR,
+);
+
 // Iniciales de día (español, semana iniciando lunes).
 export const WEEKDAY_INITIALS = ['L', 'M', 'M', 'J', 'V', 'S', 'D'] as const;
 
