@@ -29,6 +29,7 @@ interface AuthState {
 }
 
 const DEV_SESSION_KEY = 'personal-os:dev-session';
+const SESSION_KEY = 'personal-os:session';
 
 function getPersistedDevSession(): { userId: string; email: string } | null {
   try {
@@ -50,6 +51,39 @@ function persistDevSession(userId: string, email: string) {
 
 function clearDevSession() {
   localStorage.removeItem(DEV_SESSION_KEY);
+}
+
+interface PersistedSession {
+  userId: string;
+  email: string | null;
+  displayName: string | null;
+  photoURL: string | null;
+}
+
+// La sesión real se persiste en localStorage para poder arrancar la app sin
+// red: se restaura al instante y Firebase refresca en segundo plano cuando hay
+// conexión. Sin esto, el arranque offline se queda esperando la validación del
+// token y nunca marca la sesión como lista.
+function getPersistedSession(): PersistedSession | null {
+  try {
+    const raw = localStorage.getItem(SESSION_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    if (parsed && typeof parsed.userId === 'string') {
+      return parsed;
+    }
+  } catch {
+    // ignore parse errors
+  }
+  return null;
+}
+
+function persistSession(session: PersistedSession) {
+  localStorage.setItem(SESSION_KEY, JSON.stringify(session));
+}
+
+function clearPersistedSession() {
+  localStorage.removeItem(SESSION_KEY);
 }
 
 let hasInitializedListener = false;
@@ -91,6 +125,16 @@ function getFirebaseErrorMessage(error: unknown): string {
 }
 
 function applyUser(set: (partial: Partial<AuthState>) => void, user: User | null) {
+  if (user) {
+    persistSession({
+      userId: user.uid,
+      email: user.email,
+      displayName: user.displayName,
+      photoURL: user.photoURL,
+    });
+  } else if (typeof navigator === 'undefined' || navigator.onLine !== false) {
+    clearPersistedSession();
+  }
   set({
     userId: user?.uid ?? null,
     email: user?.email ?? null,
@@ -153,12 +197,36 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       return authUnsubscribe;
     }
 
-    // 2. Normal Firebase auth flow for non-dev users
+    // 2. Restore persisted real session so the app can start offline without
+    // waiting for Firebase to validate the token.
+    const persistedSession = getPersistedSession();
+    if (persistedSession) {
+      set({
+        userId: persistedSession.userId,
+        email: persistedSession.email,
+        displayName: persistedSession.displayName,
+        photoURL: persistedSession.photoURL,
+        isDevSession: false,
+        isReady: true,
+        isLoading: false,
+        error: null,
+      });
+    }
+
+    // 3. Normal Firebase auth flow for non-dev users
     authUnsubscribe = observeAuthState((user) => {
       if (get().isDevSession) {
         // Should not happen without persisted session, but guard anyway
         return;
       }
+
+      // Sin red, Firebase puede emitir null sin haber podido revalidar el
+      // token. En ese caso se conserva la sesión restaurada desde el caché
+      // local para no redirigir al login sin conexión.
+      if (!user && typeof navigator !== 'undefined' && navigator.onLine === false) {
+        return;
+      }
+
       applyUser(set, user);
     });
 
@@ -239,6 +307,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         // Ignorar errores al cerrar sesion anonima
       }
       clearDevSession();
+      clearPersistedSession();
       set({
         userId: null,
         email: null,
@@ -255,6 +324,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     set({ isLoading: true, error: null });
     try {
       await signOutUser();
+      clearPersistedSession();
     } catch (error) {
       set({ isLoading: false, error: getFirebaseErrorMessage(error) });
       throw error;

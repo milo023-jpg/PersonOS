@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { Outlet, Link, useLocation } from "react-router-dom";
 import { SystemScrollArea } from "../shared/ui/SystemScrollArea";
+import OfflineBanner from "../shared/ui/OfflineBanner";
 import { useAuthStore } from "../modules/auth/application/store/authStore";
 
 interface NavItem {
@@ -252,6 +253,8 @@ export default function MainLayout() {
 
             {/* Main Content */}
             <div className="flex-1 flex flex-col overflow-hidden relative">
+                <OfflineBanner />
+
                 {/* Header */}
                 <header className="h-16 md:h-20 bg-surface flex items-center justify-between px-4 md:px-10 shadow-sm z-10 relative dark:border-b dark:border-gray-800">
                     <div className="flex items-center gap-3 md:gap-0">

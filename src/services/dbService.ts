@@ -1,6 +1,7 @@
 import { doc, getDoc, setDoc, collection, getDocs, updateDoc, deleteDoc, addDoc, query, where, QueryConstraint, deleteField } from 'firebase/firestore';
 import { db } from './firebase';
 import { useAuthStore } from '../modules/auth/application/store/authStore';
+import { friendlyFirestoreError } from '../shared/utils/offline';
 import { logger } from '../shared/utils/logger';
 
 function isPlainObject(value: unknown): value is Record<string, unknown> {
@@ -75,7 +76,7 @@ export const dbService = {
       return docSnap.exists() ? { id: docSnap.id, ...docSnap.data() } as T : null;
     } catch (error) {
       logger.error(`Error getDocument ${collectionPath}/${id}:`, error);
-      throw error;
+      throw friendlyFirestoreError(error);
     }
   },
 
@@ -86,7 +87,7 @@ export const dbService = {
       await setDoc(doc(db, collectionPath, id), removeUndefinedValues(data));
     } catch (error) {
       logger.error(`Error createDocument ${collectionPath}/${id}:`, error);
-      throw error;
+      throw friendlyFirestoreError(error);
     }
   },
 
@@ -98,7 +99,7 @@ export const dbService = {
       return docRef.id;
     } catch (error) {
       logger.error(`Error addDocument ${collectionPath}:`, error);
-      throw error;
+      throw friendlyFirestoreError(error);
     }
   },
 
@@ -111,7 +112,7 @@ export const dbService = {
       logger.error(`Error updateDocument ${collectionPath}/${id}:`, error, {
         payload: data,
       });
-      throw error;
+      throw friendlyFirestoreError(error);
     }
   },
 
@@ -124,7 +125,7 @@ export const dbService = {
       return querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }) as T);
     } catch (error) {
       logger.error(`Error queryDocuments ${collectionPath}:`, error);
-      throw error;
+      throw friendlyFirestoreError(error);
     }
   },
 
@@ -136,7 +137,7 @@ export const dbService = {
       return querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }) as T);
     } catch (error) {
       logger.error(`Error getCollectionDocuments ${collectionPath}:`, error);
-      throw error;
+      throw friendlyFirestoreError(error);
     }
   },
 
@@ -149,7 +150,7 @@ export const dbService = {
       return querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }) as T);
     } catch (error) {
       logger.error(`Error queryMultiple ${collectionPath}:`, error);
-      throw error;
+      throw friendlyFirestoreError(error);
     }
   },
 
@@ -160,7 +161,7 @@ export const dbService = {
       await setDoc(doc(db, collectionPath, id), removeUndefinedValues(data), { merge: true });
     } catch (error) {
       logger.error(`Error upsertDocument ${collectionPath}/${id}:`, error);
-      throw error;
+      throw friendlyFirestoreError(error);
     }
   },
 
@@ -171,7 +172,7 @@ export const dbService = {
       await deleteDoc(doc(db, collectionPath, id));
     } catch (error) {
       logger.error(`Error deleteDocument ${collectionPath}/${id}:`, error);
-      throw error;
+      throw friendlyFirestoreError(error);
     }
   }
 };

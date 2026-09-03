@@ -8,6 +8,7 @@ import { logger } from '../../../../shared/utils/logger';
 import { useAuthStore } from '../../../../modules/auth/application/store/authStore';
 import { cancelTaskReminders } from '../services/taskReminder';
 import { pickNextOrder } from '../../domain/utils/taskSorting';
+import { getNextDueDate } from '../services/taskRecurrence';
 
 function normalizeTask(task: Task): Task {
     return {
@@ -137,9 +138,33 @@ export const useTasksStore = create<TasksState>((set, get) => ({
                     ? (baseTask.order as number)
                     : pickNextOrder(get().tasks.filter((t) => t.listId === baseTask.listId)),
             };
-            const id = await taskRepository.createTask(normalizedTask);
-            set((state) => ({ tasks: [{ ...normalizedTask, id }, ...state.tasks] }));
-            return id;
+
+            // Patrón optimista: la tarea aparece de inmediato en la lista con un id
+            // local. La persistencia corre en segundo plano y, sin conexión, Firestore
+            // la encola hasta sincronizar con el servidor.
+            const tempId = crypto.randomUUID();
+            const optimisticTask: Task = { ...normalizedTask, id: tempId };
+            set((state) => ({ tasks: [optimisticTask, ...state.tasks], isLoading: false }));
+
+            const { id: _ignored, ...persistedTask } = optimisticTask;
+            void _ignored;
+            taskRepository
+                .createTask(persistedTask as Omit<Task, 'id'>)
+                .then((realId) => {
+                    set((state) => ({
+                        tasks: state.tasks.map((task) => (task.id === tempId ? { ...task, id: realId } : task)),
+                    }));
+                })
+                .catch((error: unknown) => {
+                    const message = error instanceof Error ? error.message : String(error);
+                    logger.error('Task creation failed in background.', error);
+                    set((state) => ({
+                        tasks: state.tasks.filter((task) => task.id !== tempId),
+                        error: message,
+                    }));
+                });
+
+            return tempId;
         } catch (error: any) {
             set({ error: error.message });
             throw error;
@@ -153,6 +178,25 @@ export const useTasksStore = create<TasksState>((set, get) => ({
         const previousTasks = get().tasks;
         const currentTask = previousTasks.find((t) => t.id === taskId);
 
+        // Tareas recurrentes: al completar no se marcan como 'completed'; se
+        // re-agendan automáticamente a la próxima ocurrencia quedando pendientes.
+        let effectivePartial = partial;
+        if (
+            partial.status === 'completed' &&
+            currentTask?.isRecurring &&
+            currentTask.recurrenceRule
+        ) {
+            const nextDue = getNextDueDate(currentTask);
+            if (nextDue !== null) {
+                effectivePartial = {
+                    ...partial,
+                    status: 'todo',
+                    dueDate: nextDue,
+                    completedAt: undefined,
+                };
+            }
+        }
+
         const reminderWasRemoved =
             Object.prototype.hasOwnProperty.call(partial, 'reminderAt') && partial.reminderAt === undefined;
         const remindersWereCleared =
@@ -160,14 +204,14 @@ export const useTasksStore = create<TasksState>((set, get) => ({
             partial.customReminders.length === 0 &&
             Array.isArray(currentTask?.customReminders) &&
             currentTask.customReminders.length > 0;
-        if (currentTask && (partial.status === 'completed' || reminderWasRemoved || remindersWereCleared)) {
+        if (currentTask && (effectivePartial.status === 'completed' || reminderWasRemoved || remindersWereCleared)) {
             cancelTaskReminders(currentTask).catch(() => {});
         }
 
         const sanitizedPartial: Partial<Task> = {
-            ...partial,
-            ...(Object.prototype.hasOwnProperty.call(partial, 'subtasks')
-                ? { subtasks: sanitizeSubtasksForPersistence(partial.subtasks) }
+            ...effectivePartial,
+            ...(Object.prototype.hasOwnProperty.call(effectivePartial, 'subtasks')
+                ? { subtasks: sanitizeSubtasksForPersistence(effectivePartial.subtasks) }
                 : {})
         };
         const timestamp = Date.now();
@@ -247,16 +291,40 @@ export const useTasksStore = create<TasksState>((set, get) => ({
         const previousTasks = get().tasks;
         const timestamp = Date.now();
 
+        // Tareas recurrentes: el paso a 'completed' se transforma en un
+        // re-agendamiento a la próxima ocurrencia (cubre vista Kanban).
+        const effectiveUpdates: Array<{ taskId: string; partial: Partial<Task> }> = updates.map(({ taskId, partial }) => {
+            if (partial.status !== 'completed') return { taskId, partial };
+
+            const currentTask = previousTasks.find((t) => t.id === taskId);
+            if (!currentTask?.isRecurring || !currentTask.recurrenceRule) {
+                return { taskId, partial };
+            }
+
+            const nextDue = getNextDueDate(currentTask);
+            if (nextDue === null) return { taskId, partial };
+
+            return {
+                taskId,
+                partial: {
+                    ...partial,
+                    status: 'todo' as TaskStatus,
+                    dueDate: nextDue,
+                    completedAt: undefined,
+                },
+            };
+        });
+
         set((state) => ({
             tasks: state.tasks.map((task) => {
-                const match = updates.find((update) => update.taskId === task.id);
+                const match = effectiveUpdates.find((update) => update.taskId === task.id);
                 return match ? normalizeTask({ ...task, ...match.partial, updatedAt: timestamp } as Task) : task;
             })
         }));
 
         try {
             await Promise.all(
-                updates.map(({ taskId, partial }) =>
+                effectiveUpdates.map(({ taskId, partial }) =>
                     taskRepository.updateTask(userId, taskId, { ...partial, updatedAt: timestamp })
                 )
             );

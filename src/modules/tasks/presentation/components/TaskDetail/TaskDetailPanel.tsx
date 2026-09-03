@@ -7,8 +7,10 @@ import { useTasksStore } from '../../../application/store/tasksStore';
 import { formatDateForInput, parseInputDateToTimestamp } from '../../../domain/utils/taskDate';
 import SubtaskList from '../Subtasks/SubtaskList';
 import { getEffectiveReminders } from '../../../application/services/taskReminder';
+import { getRecurrenceLabel } from '../../../application/services/taskRecurrence';
 import { notificationService } from '../../../../../services/notifications/NotificationService';
 import ReminderSheet from '../Reminders/ReminderSheet';
+import RecurrencePicker from './RecurrencePicker';
 
 interface Props {
   task: Task | null;
@@ -35,15 +37,19 @@ export default function TaskDetailPanel({ task, onClose }: Props) {
     const [isStatusOpen, setIsStatusOpen] = useState(false);
     const [isPriorityOpen, setIsPriorityOpen] = useState(false);
     const [isReminderSheetOpen, setIsReminderSheetOpen] = useState(false);
+    const [isRecurrenceOpen, setIsRecurrenceOpen] = useState(false);
     const [reminderError, setReminderError] = useState<string | null>(null);
+    const [now] = useState(() => Date.now());
 
     const statusRef = useRef<HTMLDivElement>(null);
     const priorityRef = useRef<HTMLDivElement>(null);
+    const recurrenceRef = useRef<HTMLDivElement>(null);
 
     useEffect(() => {
         const handleClickOutside = (e: MouseEvent) => {
             if (statusRef.current && !statusRef.current.contains(e.target as Node)) setIsStatusOpen(false);
             if (priorityRef.current && !priorityRef.current.contains(e.target as Node)) setIsPriorityOpen(false);
+            if (recurrenceRef.current && !recurrenceRef.current.contains(e.target as Node)) setIsRecurrenceOpen(false);
         };
         document.addEventListener('mousedown', handleClickOutside);
         return () => document.removeEventListener('mousedown', handleClickOutside);
@@ -284,6 +290,42 @@ export default function TaskDetailPanel({ task, onClose }: Props) {
                                 </button>
 
                                 {reminderError && <p className="text-xs font-bold text-red-500">{reminderError}</p>}
+                            </div>
+
+                            {/* Repetición */}
+                            <div className="flex flex-col gap-2 pt-2 border-t border-gray-100 dark:border-gray-800">
+                                <span className="text-xs font-black uppercase text-text-secondary tracking-wider">🔁 Repetición</span>
+
+                                <div className="relative" ref={recurrenceRef}>
+                                    <button
+                                        type="button"
+                                        onClick={() => setIsRecurrenceOpen(!isRecurrenceOpen)}
+                                        className={`w-max px-4 py-2 rounded-xl text-sm font-bold border transition-colors ${
+                                            task.isRecurring && task.recurrenceRule
+                                                ? 'border-primary/40 text-primary dark:text-purple-300 bg-primary/10'
+                                                : 'border-dashed border-gray-300 dark:border-white/10 text-text-secondary hover:text-primary hover:border-primary/40'
+                                        }`}
+                                    >
+                                        {task.recurrenceRule ? `🔁 ${getRecurrenceLabel(task.recurrenceRule)}` : '+ Repetir tarea'}
+                                    </button>
+
+                                    {isRecurrenceOpen && (
+                                        <div className="absolute top-full left-0 mt-2 bg-white dark:bg-[#1a1a24] border border-gray-200 dark:border-white/10 rounded-2xl shadow-xl z-50 p-4 w-80 max-w-[calc(100vw-2rem)]">
+                                            <RecurrencePicker
+                                                rule={task.recurrenceRule}
+                                                referenceDate={task.dueDate ?? now}
+                                                onChange={(rule) => {
+                                                    if (rule) {
+                                                        handleChangeRecord({ isRecurring: true, recurrenceRule: rule });
+                                                    } else {
+                                                        handleChangeRecord({ isRecurring: false, recurrenceRule: undefined });
+                                                    }
+                                                    setIsRecurrenceOpen(false);
+                                                }}
+                                            />
+                                        </div>
+                                    )}
+                                </div>
                             </div>
                         </div>
 

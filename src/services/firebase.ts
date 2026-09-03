@@ -1,5 +1,5 @@
 import { initializeApp } from "firebase/app";
-import { getFirestore } from "firebase/firestore";
+import { initializeFirestore, persistentLocalCache, persistentMultipleTabManager } from "firebase/firestore";
 import { getAuth, indexedDBLocalPersistence, initializeAuth } from "firebase/auth";
 import { Capacitor } from "@capacitor/core";
 
@@ -15,8 +15,13 @@ const firebaseConfig = {
 
 const app = initializeApp(firebaseConfig);
 
-// TODO: (Ejercicio) Crear un Wrapper Pattern en la base de datos
-export const db = getFirestore(app);
+// Se usa persistencia local (IndexedDB) para permitir el modo offline:
+// los documentos leídos se guardan en el dispositivo y las escrituras se
+// encolan y sincronizan cuando vuelve la conexión. Esto funciona tanto en la
+// WebView de Capacitor como en el navegador (PWA).
+export const db = initializeFirestore(app, {
+    localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() }),
+});
 
 // En WebView nativo (Capacitor) se usa persistencia IndexedDB para que la sesión
 // sobreviva al cierre y reapertura de la app. En web se conserva el

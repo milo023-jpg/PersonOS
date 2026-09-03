@@ -4,12 +4,14 @@ import { useTasksStore } from '../../../application/store/tasksStore';
 import { useTaskListsStore } from '../../../application/store/taskListsStore';
 import { useContextsStore } from '../../../../contexts/application/store/contextsStore';
 import { GENERAL_LIST_ID } from '../../../domain/constants/defaults';
-import type { Task, TaskPriority, TaskStatus, CustomReminder } from '../../../domain/models/Task';
+import type { Task, TaskPriority, TaskStatus, CustomReminder, RecurrenceRule } from '../../../domain/models/Task';
 import DatePickerPopover from './DatePickerPopover';
 import { logger } from '../../../../../shared/utils/logger';
 import { buildSingleTaskReminders, getEffectiveReminders } from '../../../application/services/taskReminder';
+import { getRecurrenceLabel } from '../../../application/services/taskRecurrence';
 import { notificationService } from '../../../../../services/notifications/NotificationService';
 import ReminderSheet from '../Reminders/ReminderSheet';
+import RecurrencePicker from '../TaskDetail/RecurrencePicker';
 
 interface Props {
   onCancel: () => void;
@@ -55,10 +57,15 @@ export default function InlineTaskCreator({ onCancel, defaultContextId, defaultL
     const [isDateOpen, setIsDateOpen] = useState(false);
     const [isTimeOpen, setIsTimeOpen] = useState(false);
     const [isReminderSheetOpen, setIsReminderSheetOpen] = useState(false);
+    const [isRecurrenceOpen, setIsRecurrenceOpen] = useState(false);
+    const [recurrence, setRecurrence] = useState<RecurrenceRule | undefined>(
+        editTask?.isRecurring ? editTask.recurrenceRule : undefined
+    );
     const [customReminders, setCustomReminders] = useState<CustomReminder[]>(() =>
         editTask ? getEffectiveReminders(editTask) : []
     );
     const [reminderError, setReminderError] = useState<string | null>(null);
+    const [now] = useState(() => Date.now());
     
     // Selectors
     const [isListOpen, setIsListOpen] = useState(false);
@@ -72,6 +79,7 @@ export default function InlineTaskCreator({ onCancel, defaultContextId, defaultL
     const listRef = useRef<HTMLDivElement>(null);
     const contextRef = useRef<HTMLDivElement>(null);
     const timeRef = useRef<HTMLDivElement>(null);
+    const recurrenceRef = useRef<HTMLDivElement>(null);
 
     // Cerrar dropdown si se hace click fuera
     useEffect(() => {
@@ -87,6 +95,9 @@ export default function InlineTaskCreator({ onCancel, defaultContextId, defaultL
             }
             if (timeRef.current && !timeRef.current.contains(event.target as Node)) {
                 setIsTimeOpen(false);
+            }
+            if (recurrenceRef.current && !recurrenceRef.current.contains(event.target as Node)) {
+                setIsRecurrenceOpen(false);
             }
         };
         document.addEventListener('mousedown', handleClickOutside);
@@ -138,17 +149,23 @@ export default function InlineTaskCreator({ onCancel, defaultContextId, defaultL
                 updates.customReminders = [];
             }
 
+            updates.isRecurring = recurrence !== undefined;
+            updates.recurrenceRule = recurrence ?? undefined;
+
             let savedTaskId: string;
             if (editTask) {
                 savedTaskId = editTask.id;
-                await updateTask(userId, editTask.id, updates);
+                // No se espera la escritura: la UI ya se actualizó de forma optimista
+                // y, sin conexión, Firestore encola el cambio hasta reconectar.
+                void updateTask(userId, editTask.id, updates).catch(() => {});
             } else {
                 const newTask: Omit<Task, 'id'> = {
                     ...updates as any,
                     userId,
                     status: defaultStatus,
                     createdAt: Date.now(),
-                    isRecurring: false,
+                    isRecurring: recurrence !== undefined,
+                    ...(recurrence ? { recurrenceRule: recurrence } : {}),
                     order: 0,
                     source: 'manual',
                     subtasks: [],
@@ -348,6 +365,39 @@ export default function InlineTaskCreator({ onCancel, defaultContextId, defaultL
                         <span>🔔</span>
                         {customReminders.length > 0 ? `${customReminders.length} recordatorios` : 'Recordarme'}
                     </button>
+                </div>
+
+                {/* 3.5 Repetición */}
+                <div className="relative shrink-0" ref={recurrenceRef}>
+                    <button
+                        type="button"
+                        title="Repetir tarea"
+                        onClick={() => setIsRecurrenceOpen(!isRecurrenceOpen)}
+                        className={`px-3 sm:px-4 py-2 rounded-full text-sm font-bold flex items-center gap-2 transition-colors ${
+                            recurrence
+                                ? 'bg-primary/20 text-primary dark:text-purple-300'
+                                : 'bg-gray-100 dark:bg-white/5 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-white/10'
+                        }`}
+                    >
+                        <span>🔁</span>
+                        {recurrence ? getRecurrenceLabel(recurrence) : 'Repetir'}
+                    </button>
+                    {isRecurrenceOpen && (
+                        <div className="absolute top-full right-0 mt-2 bg-white dark:bg-[#1a1a24] border border-gray-200 dark:border-white/10 rounded-2xl shadow-xl z-[60] overflow-hidden w-80 max-w-[calc(100vw-2rem)] p-4">
+                            <RecurrencePicker
+                                rule={recurrence}
+                                referenceDate={dueDate ?? now}
+                                onChange={(rule) => {
+                                    setRecurrence(rule);
+                                    if (rule && dueDate === undefined) {
+                                        const today = new Date();
+                                        today.setHours(12, 0, 0, 0);
+                                        setDueDate(today.getTime());
+                                    }
+                                }}
+                            />
+                        </div>
+                    )}
                 </div>
             </div>
 
